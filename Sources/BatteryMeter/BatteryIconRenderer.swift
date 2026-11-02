@@ -1,20 +1,40 @@
 import AppKit
 import BatteryCore
 
-/// Draws the "battery with percentage inside" menu bar icon. A vector drawing handler, so
-/// it stays sharp at any scale. The numerals and the bolt are knocked out of the level fill
-/// and drawn normally over the empty part, so they read over both.
+/// Draws the "battery with percentage inside" menu bar icon in the style of the native
+/// battery symbol: a slim translucent outline, a rounded body, a small nub and a soft level
+/// fill. A vector drawing handler, so it stays sharp at any scale.
+///
+/// The numerals are drawn once, in the ink color, over a translucent fill, so they read the
+/// same over the filled and the empty part and are never split. While charging, a bolt sits
+/// to the left of the battery, outside the body.
 enum BatteryIconRenderer {
-    static let size = NSSize(width: 27, height: 12)
-    private static let body = NSRect(x: 0.5, y: 0.5, width: 24, height: 11)
-    private static let fontSize: CGFloat = 8
+    private static let height: CGFloat = 12
+    private static let bodyWidth: CGFloat = 25
+    private static let outlineWidth: CGFloat = 1.1
+    private static let outlineAlpha: CGFloat = 0.45
+    private static let cornerRadius: CGFloat = 3.5
+    private static let nubSize = NSSize(width: 1.6, height: 4.5)
+    private static let nubGap: CGFloat = 0.8
+    private static let fillInset: CGFloat = 1.6
+    private static let fontSize: CGFloat = 9
+    private static let boltSize = NSSize(width: 4.5, height: 8)
+    private static let boltGap: CGFloat = 1.5
+
+    /// The icon's size when not charging; charging adds `boltSize.width + boltGap`.
+    static let size = size(charging: false)
+
+    static func size(charging: Bool) -> NSSize {
+        NSSize(width: (charging ? boltSize.width + boltGap : 0) + bodyWidth + nubGap + nubSize.width + 0.5,
+               height: height)
+    }
 
     /// A template image when `role` is `.none` (it adapts to the menu bar); otherwise a
     /// colored one: red for `.low`, green for `.charging`. A colored image draws its outline
     /// and numerals in `ink`, which follows the appearance it is drawn in unless given.
     static func image(percent: Int, charging: Bool, role: MenuBarColorRole, ink: NSColor? = nil) -> NSImage {
         let percent = min(max(percent, 0), 100)
-        let image = NSImage(size: size, flipped: false) { _ in
+        let image = NSImage(size: size(charging: charging), flipped: false) { _ in
             draw(percent: percent, charging: charging, role: role, ink: ink)
             return true
         }
@@ -23,67 +43,53 @@ enum BatteryIconRenderer {
     }
 
     private static func draw(percent: Int, charging: Bool, role: MenuBarColorRole, ink custom: NSColor?) {
-        guard let ctx = NSGraphicsContext.current else { return }
         let template = role == .none
         let ink: NSColor = template ? .black : custom ?? .labelColor
-        let fillColor: NSColor = switch role {
+        let tint: NSColor = switch role {
         case .none: .black
         case .low: .systemRed
         case .charging: .systemGreen
         }
+        let fillColor = template ? tint.withAlphaComponent(0.28) : tint.withAlphaComponent(0.9)
 
-        // Outline and terminal nub.
-        ink.setStroke()
-        let outline = NSBezierPath(roundedRect: body, xRadius: 3, yRadius: 3)
-        outline.lineWidth = 1
-        outline.stroke()
-        ink.setFill()
-        NSBezierPath(roundedRect: NSRect(x: 24.5, y: 4, width: 2, height: 4), xRadius: 1, yRadius: 1).fill()
+        let bodyX = (charging ? boltSize.width + boltGap : 0) + 0.5
+        let outer = NSRect(x: bodyX, y: 0, width: bodyWidth, height: height)
 
-        // Level fill, with a visible sliver above 0%.
-        let inner = body.insetBy(dx: 1.5, dy: 1.5)
-        var fillRect = NSRect.zero
+        // Level fill (a visible sliver above 0%), under the outline and numerals.
+        let inner = outer.insetBy(dx: fillInset, dy: fillInset)
         if percent > 0 {
-            fillRect = NSRect(x: inner.minX, y: inner.minY,
-                              width: max(1.5, inner.width * CGFloat(percent) / 100), height: inner.height)
+            let width = max(2, inner.width * CGFloat(percent) / 100)
             fillColor.setFill()
-            NSBezierPath(roundedRect: fillRect, xRadius: 1.7, yRadius: 1.7).fill()
+            NSBezierPath(roundedRect: NSRect(x: inner.minX, y: inner.minY, width: width, height: inner.height),
+                         xRadius: cornerRadius - fillInset, yRadius: cornerRadius - fillInset).fill()
         }
 
-        // Numerals (and the bolt while charging), centered in the body.
-        let font = NSFont.monospacedDigitSystemFont(ofSize: fontSize, weight: .semibold)
-        let text = "\(percent)" as NSString
+        // Outline and terminal nub, at the same translucency.
+        let edge = ink.withAlphaComponent(outlineAlpha)
+        edge.setStroke()
+        let outline = NSBezierPath(
+            roundedRect: outer.insetBy(dx: outlineWidth / 2, dy: outlineWidth / 2),
+            xRadius: cornerRadius - outlineWidth / 2, yRadius: cornerRadius - outlineWidth / 2)
+        outline.lineWidth = outlineWidth
+        outline.stroke()
+        edge.setFill()
+        NSBezierPath(roundedRect: NSRect(x: outer.maxX + nubGap, y: (height - nubSize.height) / 2,
+                                         width: nubSize.width, height: nubSize.height),
+                     xRadius: nubSize.width / 2, yRadius: nubSize.width / 2).fill()
+
+        // Numerals, once, centered in the body.
+        let font = NSFont.monospacedDigitSystemFont(ofSize: fontSize, weight: .bold)
         let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: ink]
+        let text = "\(percent)" as NSString
         let textSize = text.size(withAttributes: attributes)
-        let boltSize = NSSize(width: 3.2, height: 6)
-        let gap: CGFloat = 0.75
-        let contentWidth = textSize.width + (charging ? boltSize.width + gap : 0)
-        var x = body.midX - contentWidth / 2
-        let midY = body.midY
-        let boltOrigin = NSPoint(x: x, y: midY - boltSize.height / 2)
-        if charging { x += boltSize.width + gap }
-        let textOrigin = NSPoint(x: x, y: midY - font.capHeight / 2 + font.descender)
+        text.draw(at: NSPoint(x: outer.midX - textSize.width / 2,
+                              y: outer.midY - font.capHeight / 2 + font.descender),
+                  withAttributes: attributes)
 
-        let drawOverlay = {
-            if charging { bolt(at: boltOrigin, size: boltSize).fill() }
-            text.draw(at: textOrigin, withAttributes: attributes)
+        if charging {
+            (template ? NSColor.black : tint).setFill()
+            bolt(at: NSPoint(x: 0, y: (height - boltSize.height) / 2), size: boltSize).fill()
         }
-        // Over the fill: knocked out. Over the rest: drawn in the ink color.
-        ctx.saveGraphicsState()
-        if percent > 0 {
-            NSBezierPath(roundedRect: fillRect, xRadius: 1.7, yRadius: 1.7).addClip()
-            ctx.compositingOperation = .destinationOut
-            drawOverlay()
-        }
-        ctx.restoreGraphicsState()
-        ctx.saveGraphicsState()
-        let outside = NSBezierPath(rect: NSRect(origin: .zero, size: size))
-        if percent > 0 { outside.append(NSBezierPath(roundedRect: fillRect, xRadius: 1.7, yRadius: 1.7)) }
-        outside.windingRule = .evenOdd
-        outside.addClip()
-        ink.setFill()
-        drawOverlay()
-        ctx.restoreGraphicsState()
     }
 
     private static func bolt(at origin: NSPoint, size: NSSize) -> NSBezierPath {

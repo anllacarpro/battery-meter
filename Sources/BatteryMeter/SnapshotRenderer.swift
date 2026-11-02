@@ -73,6 +73,7 @@ enum SnapshotRenderer {
                               width: 300, height: 380, scheme: scheme,
                               to: dir.appending(path: "popover-high-use-hosted-\(suffix).png"))
             write(MenuBarIconSheet(), scheme: scheme, to: dir.appending(path: "menubar-icons-\(suffix).png"))
+            write(NativeIconSheet(), scheme: scheme, to: dir.appending(path: "menubar-icons-native-\(suffix).png"))
             write(EmptyStateView().padding(16).frame(width: 300), scheme: scheme,
                   to: dir.appending(path: "empty-\(suffix).png"))
             for (name, item, source, report, state, height) in [
@@ -223,7 +224,8 @@ private struct MenuBarIconSheet: View {
                         ForEach(Self.levels, id: \.self) { level in
                             Image(nsImage: BatteryIconRenderer.image(percent: level, charging: row.1, role: row.2, ink: ink))
                                 .resizable()
-                                .frame(width: BatteryIconRenderer.size.width * 4, height: BatteryIconRenderer.size.height * 4)
+                                .frame(width: BatteryIconRenderer.size(charging: row.1).width * 4,
+                                       height: BatteryIconRenderer.size.height * 4)
                         }
                     }
                 }
@@ -245,6 +247,88 @@ private struct MenuBarIconSheet: View {
                 MenuBarPreview(
                     style: MenuBarStyle(icon: .percentInside, format: .watts, colors: .lowAndCharging, lowThreshold: 10, timeStyle: .clock),
                     source: PreviewSource(percent: 60, state: .charging(timeToFull: 1800), watts: 38.4))
+            }
+        }
+        .padding(16)
+    }
+}
+
+/// Review-only: the native battery symbol above the custom icon at the same height, at 4x
+/// and at real size, in each variant.
+private struct NativeIconSheet: View {
+    private static let levels: [(percent: Int, symbol: String)] = [
+        (100, "battery.100percent"), (85, "battery.75percent"), (50, "battery.50percent"),
+        (20, "battery.25percent"), (8, "battery.0percent"), (5, "battery.0percent"),
+    ]
+    private static let rows: [(String, Bool, MenuBarColorRole)] = [
+        ("Template", false, .none), ("Red", false, .low),
+        ("Template, charging", true, .none), ("Green, charging", true, .charging),
+    ]
+
+    @Environment(\.colorScheme) private var scheme
+    private var ink: NSColor { scheme == .dark ? .white : .black }
+
+    private func native(_ symbol: String, charging: Bool, role: MenuBarColorRole) -> NSImage {
+        let name = charging ? symbol + ".bolt" : symbol
+        let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
+        let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(config) ?? NSImage()
+        image.isTemplate = true
+        return image
+    }
+
+    /// A bitmap of `image` drawn at `scale` times its size and 2x again in pixels, so the 4x
+    /// views are sharp rather than an upscaled 1x raster. Keeps the template flag.
+    private func sharp(_ image: NSImage, scale: CGFloat) -> NSImage {
+        guard scale > 1 else { return image }
+        let pixels = 2 * scale
+        let width = Int((image.size.width * pixels).rounded()), height = Int((image.size.height * pixels).rounded())
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height, bitsPerSample: 8,
+            samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+            bytesPerRow: 0, bitsPerPixel: 0) else { return image }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        image.draw(in: NSRect(x: 0, y: 0, width: width, height: height))
+        NSGraphicsContext.restoreGraphicsState()
+        let result = NSImage(size: NSSize(width: image.size.width * scale, height: image.size.height * scale))
+        result.addRepresentation(rep)
+        result.isTemplate = image.isTemplate
+        return result
+    }
+
+    private func column(_ level: (percent: Int, symbol: String), _ row: (String, Bool, MenuBarColorRole),
+                        scale: CGFloat) -> some View {
+        let mine = sharp(BatteryIconRenderer.image(percent: level.percent, charging: row.1, role: row.2, ink: ink), scale: scale)
+        let theirs = sharp(native(level.symbol, charging: row.1, role: row.2), scale: scale)
+        let box = NSSize(width: BatteryIconRenderer.size(charging: row.1).width * scale,
+                         height: BatteryIconRenderer.size.height * scale)
+        return VStack(alignment: .leading, spacing: scale > 1 ? 6 : 3) {
+            Image(nsImage: theirs).resizable().scaledToFit()
+                .frame(width: theirs.size.width, height: theirs.size.height)
+                .foregroundStyle(row.2.color ?? .primary)
+                .frame(width: box.width, height: box.height, alignment: .leading)
+            Image(nsImage: mine).resizable()
+                .frame(width: mine.size.width, height: mine.size.height)
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Native above, custom below, 4x").font(.caption).foregroundStyle(.secondary)
+            ForEach(Self.rows, id: \.0) { row in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(row.0).font(.caption).foregroundStyle(.secondary)
+                    HStack(spacing: 14) {
+                        ForEach(Self.levels, id: \.percent) { column($0, row, scale: 4) }
+                    }
+                }
+            }
+            Text("Real size, native above, custom below").font(.caption).foregroundStyle(.secondary)
+            ForEach(Self.rows, id: \.0) { row in
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(Self.levels, id: \.percent) { column($0, row, scale: 1) }
+                }
             }
         }
         .padding(16)
