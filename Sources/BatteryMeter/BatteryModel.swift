@@ -122,9 +122,8 @@ final class BatteryModel {
         liveAmps = estimator.liveAmps
 
         // Recording waits for the initial load so nothing is read back twice.
-        if record, historyLoaded,
-           lastRecorded.map({ now.timeIntervalSince($0) >= Self.recordInterval - 1 }) ?? true {
-            lastRecorded = now
+        if record, historyLoaded, isTimeToRecord(at: reading.timestamp) {
+            lastRecorded = reading.timestamp
             try? store.append(reading)
             history.append(reading)
             let cutoff = retentionCutoff
@@ -134,6 +133,13 @@ final class BatteryModel {
             learned = FullChargeLearner.estimate(history: history, current: nil, liveWatts: nil)
         }
         updateFullCharge()
+    }
+
+    /// Due once a minute. A clock set back (`at` earlier than the last recording) also
+    /// counts as due, so recording never stalls until the clock catches up.
+    private func isTimeToRecord(at date: Date) -> Bool {
+        guard let last = lastRecorded else { return true }
+        return date < last || date.timeIntervalSince(last) >= Self.recordInterval - 1
     }
 
     func resetLearnedData() {
