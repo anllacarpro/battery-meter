@@ -33,6 +33,6 @@ import Testing
     }
 
     @Test func rawValuesMatchStoredDefaults() {
-        #expect(MenuBarFormat.allCases.map(\.rawValue) == ["hours", "percent", "both"])
+        #expect(MenuBarFormat.allCases.map(\.rawValue) == ["hours", "percent", "both", "watts", "none"])
     }
 }

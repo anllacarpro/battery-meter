@@ -15,7 +15,7 @@ final class StatusItemController: NSObject, NSMenuDelegate, NSPopoverDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let popover = NSPopover()
     private var defaultsObserver: NSObjectProtocol?
-    private var shownFormat: MenuBarFormat?
+    private var shownStyle: MenuBarStyle?
     /// Monotonic time of the last popover close.
     private var lastPopoverClose: TimeInterval = 0
 
@@ -46,12 +46,12 @@ final class StatusItemController: NSObject, NSMenuDelegate, NSPopoverDelegate {
         }
 
         model.onRefresh = { [weak self] in self?.updateLabel() }
-        // Any defaults write posts this; only a menuBarFormat change redraws.
+        // Any defaults write posts this; only a change to one of the five menu bar keys redraws.
         defaultsObserver = NotificationCenter.default.addObserver(
             forName: UserDefaults.didChangeNotification, object: nil, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self, self.shownFormat != Self.currentFormat else { return }
+                guard let self, self.shownStyle != Self.currentStyle else { return }
                 self.updateLabel()
             }
         }
@@ -62,26 +62,44 @@ final class StatusItemController: NSObject, NSMenuDelegate, NSPopoverDelegate {
         if let defaultsObserver { NotificationCenter.default.removeObserver(defaultsObserver) }
     }
 
-    private static var currentFormat: MenuBarFormat {
-        UserDefaults.standard.string(forKey: "menuBarFormat").flatMap(MenuBarFormat.init(rawValue:)) ?? .hours
-    }
+    private static var currentStyle: MenuBarStyle { MenuBarStyle(defaults: .standard) }
 
     func updateLabel() {
-        let format = Self.currentFormat
-        shownFormat = format
+        let style = Self.currentStyle
+        shownStyle = style
         guard let button = statusItem.button else { return }
         guard let reading = model.reading, let state = model.state else {
-            button.image = symbol("battery.0percent")
-            button.title = ""
-            button.contentTintColor = nil
+            apply(image: symbol("battery.0percent"), title: "", tint: nil, to: button)
             button.setAccessibilityLabel("Battery Meter, no battery reading")
             return
         }
         let percent = reading.percent
-        button.image = symbol(MenuBarAppearance.symbolName(percent: percent, state: state))
-        button.title = MenuBarText.text(state: state, percent: percent, format: format)
-        button.contentTintColor = MenuBarAppearance.isLow(percent: percent, state: state) ? .systemRed : nil
+        let role = MenuBarAppearance.colorRole(percent: percent, state: state, style: style)
+        let title = MenuBarText.text(
+            state: state, percent: percent, format: style.format,
+            timeStyle: style.timeStyle, watts: model.liveWatts)
+        let image: NSImage?
+        var tint: NSColor?
+        switch style.effectiveIcon {
+        case .symbol:
+            image = symbol(MenuBarAppearance.symbolName(percent: percent, state: state))
+            tint = role.nsColor
+        case .percentInside:
+            image = BatteryIconRenderer.image(percent: percent, charging: state.isCharging, role: role)
+            tint = role.nsColor  // text only; a colored image ignores the tint
+        case .none:
+            image = nil
+            tint = role.nsColor
+        }
+        apply(image: image, title: title, tint: tint, to: button)
         button.setAccessibilityLabel(MenuBarAppearance.accessibilityLabel(percent: percent, state: state))
+    }
+
+    private func apply(image: NSImage?, title: String, tint: NSColor?, to button: NSStatusBarButton) {
+        button.image = image
+        button.title = title
+        button.contentTintColor = tint
+        button.imagePosition = image == nil ? .noImage : title.isEmpty ? .imageOnly : .imageLeading
     }
 
     private func symbol(_ name: String) -> NSImage? {
@@ -133,7 +151,7 @@ final class StatusItemController: NSObject, NSMenuDelegate, NSPopoverDelegate {
         settings.refreshLaunchAtLogin()  // it can change in System Settings
         let menu = NSMenu()
         menu.delegate = self
-        for item in QuickMenu.items(format: Self.currentFormat, launchAtLogin: settings.launchAtLogin) {
+        for item in QuickMenu.items(format: Self.currentStyle.format, launchAtLogin: settings.launchAtLogin) {
             menu.addItem(menuItem(item))
         }
         // Set only while it's open: with a menu attached, every click would open it.
@@ -187,5 +205,15 @@ final class StatusItemController: NSObject, NSMenuDelegate, NSPopoverDelegate {
     private func showWindow(pane: SidebarItem?) {
         closePopover()
         window.show(pane: pane)
+    }
+}
+
+private extension MenuBarColorRole {
+    var nsColor: NSColor? {
+        switch self {
+        case .none: nil
+        case .low: .systemRed
+        case .charging: .systemGreen
+        }
     }
 }

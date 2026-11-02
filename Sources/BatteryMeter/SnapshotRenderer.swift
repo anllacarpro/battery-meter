@@ -72,6 +72,7 @@ enum SnapshotRenderer {
             await writeWindow(PopoverView(model: highUse, sampler: highUseSampler, actions: .inert),
                               width: 300, height: 380, scheme: scheme,
                               to: dir.appending(path: "popover-high-use-hosted-\(suffix).png"))
+            write(MenuBarIconSheet(), scheme: scheme, to: dir.appending(path: "menubar-icons-\(suffix).png"))
             write(EmptyStateView().padding(16).frame(width: 300), scheme: scheme,
                   to: dir.appending(path: "empty-\(suffix).png"))
             for (name, item, source, report, state, height) in [
@@ -91,6 +92,7 @@ enum SnapshotRenderer {
                 ("health", .health, model, reports, settings, 520),
                 ("history-sample", .history, sample, reports, settings, 520),
                 ("settings", .settings, model, reports, settings, 520),
+                ("settings-menubar", .settings, model, reports, settings, 640),
                 ("settings-note", .settings, model, reports, settingsWithNote, 520),
             ] {
                 await writeWindow(
@@ -197,6 +199,55 @@ enum SnapshotRenderer {
             if let match = sub as? T ?? firstSubview(type, in: sub) { return match }
         }
         return nil
+    }
+}
+
+/// Review-only: the percentage-inside icon at each level, template and colored, charging
+/// or not. Large (4x) to check the numerals, then at real size on a menu-bar-like strip.
+private struct MenuBarIconSheet: View {
+    private static let levels = [100, 85, 50, 20, 8, 5]
+    private static let rows: [(String, Bool, MenuBarColorRole)] = [
+        ("Template", false, .none), ("Red", false, .low),
+        ("Template, charging", true, .none), ("Green, charging", true, .charging),
+    ]
+
+    @Environment(\.colorScheme) private var scheme
+    private var ink: NSColor { scheme == .dark ? .white : .black }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(Self.rows, id: \.0) { row in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(row.0).font(.caption).foregroundStyle(.secondary)
+                    HStack(spacing: 14) {
+                        ForEach(Self.levels, id: \.self) { level in
+                            Image(nsImage: BatteryIconRenderer.image(percent: level, charging: row.1, role: row.2, ink: ink))
+                                .resizable()
+                                .frame(width: BatteryIconRenderer.size.width * 4, height: BatteryIconRenderer.size.height * 4)
+                        }
+                    }
+                }
+            }
+            Text("Real size").font(.caption).foregroundStyle(.secondary)
+            ForEach(Self.rows, id: \.0) { row in
+                HStack(spacing: 10) {
+                    ForEach(Self.levels, id: \.self) { level in
+                        Image(nsImage: BatteryIconRenderer.image(percent: level, charging: row.1, role: row.2, ink: ink))
+                    }
+                }
+            }
+            Text("Preview strips").font(.caption).foregroundStyle(.secondary)
+            HStack {
+                MenuBarPreview(style: .standard, source: PreviewSource(percent: 75, state: .onBattery(timeLeft: 19_800), watts: 12.4))
+                MenuBarPreview(
+                    style: MenuBarStyle(icon: .percentInside, format: .hours, colors: .lowOnly, lowThreshold: 10, timeStyle: .clock),
+                    source: PreviewSource(percent: 75, state: .onBattery(timeLeft: 19_800), watts: 12.4))
+                MenuBarPreview(
+                    style: MenuBarStyle(icon: .percentInside, format: .watts, colors: .lowAndCharging, lowThreshold: 10, timeStyle: .clock),
+                    source: PreviewSource(percent: 60, state: .charging(timeToFull: 1800), watts: 38.4))
+            }
+        }
+        .padding(16)
     }
 }
 

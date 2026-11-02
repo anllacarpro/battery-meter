@@ -17,10 +17,19 @@ public enum MenuBarAppearance {
         }
     }
 
-    /// Low means on battery at 10% or less.
-    public static func isLow(percent: Int, state: PowerState) -> Bool {
-        if case .onBattery = state { return percent <= 10 }
+    /// Low means on battery at or below `threshold` percent.
+    public static func isLow(percent: Int, state: PowerState, threshold: Int = 10) -> Bool {
+        if case .onBattery = state { return percent <= threshold }
         return false
+    }
+
+    /// The color the item takes: red when low, green while charging, as the style allows.
+    public static func colorRole(percent: Int, state: PowerState, style: MenuBarStyle) -> MenuBarColorRole {
+        if style.colors != .monochrome, isLow(percent: percent, state: state, threshold: style.lowThreshold) {
+            return .low
+        }
+        if style.colors == .lowAndCharging, case .charging = state { return .charging }
+        return .none
     }
 
     public static func accessibilityLabel(percent: Int, state: PowerState) -> String {

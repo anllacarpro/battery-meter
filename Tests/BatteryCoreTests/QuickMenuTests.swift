@@ -11,9 +11,9 @@ import Testing
         #expect(items.map(\.isSeparator) == [
             false, false, false, false, true, false, false, false, true, false,
         ])
-        #expect(items[5].children.map(\.title) == ["Hours left", "Percent", "Hours and percent"])
+        #expect(items[5].children.map(\.title) == ["Hours left", "Percent", "Hours and percent", "Power draw", "Icon only"])
         #expect(items[5].children.map(\.action) == [
-            .setFormat(.hours), .setFormat(.percent), .setFormat(.both),
+            .setFormat(.hours), .setFormat(.percent), .setFormat(.both), .setFormat(.watts), .setFormat(.none),
         ])
         #expect(items.map(\.action) == [
             .open, .reports, .history, .health, nil, nil, .toggleLaunchAtLogin, .settings, nil, .quit,

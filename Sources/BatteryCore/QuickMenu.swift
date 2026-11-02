@@ -42,6 +42,8 @@ public enum QuickMenu {
             (.hours, "Hours left"),
             (.percent, "Percent"),
             (.both, "Hours and percent"),
+            (.watts, "Power draw"),
+            (.none, "Icon only"),
         ]
         return [
             QuickMenuItem(title: "Open Battery Meter", action: .open),

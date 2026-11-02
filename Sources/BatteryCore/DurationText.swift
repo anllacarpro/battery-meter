@@ -8,4 +8,12 @@ public enum DurationText {
         let h = totalMinutes / 60, m = totalMinutes % 60
         return h > 0 ? "\(h)h \(m)m" : "\(m)m"
     }
+
+    /// Same rounding as `short`, as clock time: "6:30", "0:45".
+    public static func clock(_ seconds: TimeInterval) -> String {
+        let capped = min(max(seconds, 0), 99 * 3600)
+        let totalMinutes = Int((capped / 300).rounded()) * 5
+        let m = totalMinutes % 60
+        return "\(totalMinutes / 60):\(m < 10 ? "0" : "")\(m)"
+    }
 }
