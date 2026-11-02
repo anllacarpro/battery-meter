@@ -72,11 +72,14 @@ private struct Header: View {
 
 private struct Footer: View {
     @Environment(\.openWindow) private var openWindow
+    /// Shared with MainWindow, so writing it here picks the pane the window opens on.
+    @AppStorage("sidebarSelection") private var selection: SidebarItem = .overview
 
     var body: some View {
         VStack(spacing: 0) {
             Divider()
             Button {
+                selection = .history
                 NSApp.activate()
                 openWindow(id: "main")
             } label: {
@@ -91,6 +94,24 @@ private struct Footer: View {
             }
             .buttonStyle(.plain)
             .padding(.top, 10)
+
+            Button {
+                NSApp.terminate(nil)
+            } label: {
+                HStack {
+                    Text("Quit Battery Meter")
+                    Spacer()
+                    Text("⌘Q")
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
+                }
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .keyboardShortcut("q")
+            .padding(.top, 8)
         }
     }
 }
