@@ -1,6 +1,8 @@
 import SwiftUI
 import Observation
+import AppKit
 import ServiceManagement
+import UniformTypeIdentifiers
 import BatteryCore
 
 /// Settings-pane state that can't live in `@State` under Command Line Tools: the reset
@@ -115,6 +117,12 @@ struct SettingsView: View {
                     }
                 }
                 LabeledContent {
+                    Button("Export history…") { exportHistory() }
+                } label: {
+                    Text("Export")
+                    Text("Save your battery history as a CSV file")
+                }
+                LabeledContent {
                     Button("Reset learned data…", role: .destructive) {
                         settings.confirmingReset = true
                     }
@@ -131,6 +139,21 @@ struct SettingsView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This deletes your battery history and the learned hours per full charge. Your battery isn't affected.")
+        }
+    }
+
+    private func exportHistory() {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "battery-history.csv"
+        panel.allowedContentTypes = [.commaSeparatedText]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try model.exportHistory(to: url)
+        } catch {
+            let alert = NSAlert()
+            alert.messageText = "Couldn't export history"
+            alert.informativeText = error.localizedDescription
+            alert.runModal()
         }
     }
 

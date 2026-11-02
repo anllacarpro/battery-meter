@@ -199,6 +199,13 @@ final class BatteryModel {
         return date < last || date.timeIntervalSince(last) >= Self.recordInterval - 1
     }
 
+    /// Writes the whole stored history as CSV. Blocking file I/O; callers run it off the main actor
+    /// only if needed (the file is small: one row a minute).
+    func exportHistory(to url: URL) throws {
+        let readings = store.load(since: .distantPast)
+        try Data(HistoryCSV.encode(readings).utf8).write(to: url, options: .atomic)
+    }
+
     func resetLearnedData() {
         generation += 1
         try? store.reset()
