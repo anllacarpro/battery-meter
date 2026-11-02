@@ -6,13 +6,19 @@ private let t0 = Date(timeIntervalSince1970: 1_000_000)
 
 private func reading(
     at offset: TimeInterval, mV: Int = 12_000, mA: Int, remaining: Int = 4_000,
+    fullCapacity: Int = 8_000, percent: Int = 50,
     charging: Bool = false, external: Bool = false, full: Bool = false, osToFull: Int? = nil
 ) -> BatteryReading {
     BatteryReading(
-        timestamp: t0.addingTimeInterval(offset), percent: 50, remainingCapacity: remaining,
-        fullChargeCapacity: 8_000, designCapacity: 8_500, cycleCount: 100,
+        timestamp: t0.addingTimeInterval(offset), percent: percent, remainingCapacity: remaining,
+        fullChargeCapacity: fullCapacity, designCapacity: 8_500, cycleCount: 100,
         voltage: mV, amperage: mA, isCharging: charging, externalConnected: external,
         fullyCharged: full, osMinutesToFull: osToFull)
+}
+
+private func timeToFull(_ state: PowerState) -> TimeInterval? {
+    if case .charging(let t) = state { return t }
+    return nil
 }
 
 private func timeLeft(_ state: PowerState) -> TimeInterval? {
@@ -78,16 +84,70 @@ private func timeLeft(_ state: PowerState) -> TimeInterval? {
         #expect(state == .pluggedIn)
     }
 
-    @Test func chargingUsesOSTimeToFull() {
+    @Test func chargingPrefersCurrentOverOSBelow80() {
         var est = PowerEstimator()
+        // 4,000 mAh missing at 2,000 mA is 2 h; macOS's 65 min is ignored below 80%.
         let state = est.update(with: reading(at: 0, mA: 2_000, charging: true, external: true, osToFull: 65))
-        #expect(state == .charging(timeToFull: 3900))
+        #expect(state == .charging(timeToFull: 7200))
     }
 
-    @Test func chargingWithoutOSEstimateIsNil() {
+    @Test func chargingWithoutOSEstimateUsesCurrent() {
         var est = PowerEstimator()
         let state = est.update(with: reading(at: 0, mA: 2_000, charging: true, external: true))
+        #expect(state == .charging(timeToFull: 7200))
+    }
+
+    @Test func chargingUsesSmoothedCurrent() throws {
+        var est = PowerEstimator()
+        var state = PowerState.pluggedIn
+        for i in 0..<30 {
+            state = est.update(with: reading(
+                at: TimeInterval(i * 10), mA: 2_000, remaining: 1_515, fullCapacity: 4_575,
+                percent: 33, charging: true, external: true))
+        }
+        let t = try #require(timeToFull(state))
+        #expect(abs(t - 1.53 * 3600) < 1)  // 3,060 mAh / 2,000 mA
+    }
+
+    @Test func chargingIgnoresOSSpikeEarly() throws {
+        var est = PowerEstimator()
+        // Owner's data: macOS said 579 min at 28% while the current ramped up on a 60 W adapter.
+        let state = est.update(with: reading(
+            at: 0, mA: 2_000, remaining: 1_281, fullCapacity: 4_575, percent: 28,
+            charging: true, external: true, osToFull: 579))
+        let t = try #require(timeToFull(state))
+        let expected = (4_575.0 - 1_281) / 2_000 * 3600
+        #expect(abs(t - expected) < 1)
+        #expect(t < 579 * 60 / 2)
+    }
+
+    @Test func nearFullUsesLargerOfOSAndCurrent() {
+        // 675 mAh missing at 1,500 mA is 27 min.
+        func state(os: Int) -> PowerState {
+            var est = PowerEstimator()
+            return est.update(with: reading(
+                at: 0, mA: 1_500, remaining: 3_900, fullCapacity: 4_575, percent: 85,
+                charging: true, external: true, osToFull: os))
+        }
+        #expect(state(os: 60) == .charging(timeToFull: 3600))  // tapering: macOS is longer
+        #expect(state(os: 10) == .charging(timeToFull: 1620))  // current is longer
+    }
+
+    @Test func lowChargeCurrentIsUnknown() {
+        var est = PowerEstimator()
+        let state = est.update(with: reading(
+            at: 0, mA: 80, percent: 95, charging: true, external: true, osToFull: 20))
         #expect(state == .charging(timeToFull: nil))
+    }
+
+    @Test func chargeGapResetsSmoother() throws {
+        var est = PowerEstimator()
+        for i in 0..<60 {
+            _ = est.update(with: reading(at: TimeInterval(i * 10), mA: 3_000, charging: true, external: true))
+        }
+        let state = est.update(with: reading(at: 590 + 400, mA: 1_000, charging: true, external: true))
+        let t = try #require(timeToFull(state))
+        #expect(abs(t - 4_000.0 / 1_000 * 3600) < 1)
     }
 
     @Test func liveTilesUseSignedAmpsAndUnits() {
