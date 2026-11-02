@@ -17,13 +17,15 @@ public struct BatteryReading: Codable, Sendable, Equatable {
     public var notChargingReason: Int?
     public var osMinutesToEmpty: Int?
     public var osMinutesToFull: Int?
+    public var nominalChargeCapacity: Int?  // mAh, macOS Maximum Capacity basis
 
     public init(
         timestamp: Date, percent: Int, remainingCapacity: Int, fullChargeCapacity: Int,
         designCapacity: Int, cycleCount: Int, designCycleCount: Int? = nil,
         voltage: Int, amperage: Int, isCharging: Bool, externalConnected: Bool,
         fullyCharged: Bool, adapterWatts: Int? = nil, notChargingReason: Int? = nil,
-        osMinutesToEmpty: Int? = nil, osMinutesToFull: Int? = nil
+        osMinutesToEmpty: Int? = nil, osMinutesToFull: Int? = nil,
+        nominalChargeCapacity: Int? = nil
     ) {
         self.timestamp = timestamp
         self.percent = percent
@@ -41,11 +43,16 @@ public struct BatteryReading: Codable, Sendable, Equatable {
         self.notChargingReason = notChargingReason
         self.osMinutesToEmpty = osMinutesToEmpty
         self.osMinutesToFull = osMinutesToFull
+        self.nominalChargeCapacity = nominalChargeCapacity
     }
 
-    /// fullChargeCapacity / designCapacity * 100
+    /// nominalChargeCapacity (falling back to fullChargeCapacity) / designCapacity * 100, capped
+    /// at 100: a new cell can measure slightly above its design capacity, which isn't
+    /// "better than new" (macOS caps it too).
     public var healthPercent: Double {
-        designCapacity > 0 ? Double(fullChargeCapacity) / Double(designCapacity) * 100 : 0
+        guard designCapacity > 0 else { return 0 }
+        let basis = (nominalChargeCapacity ?? 0) > 0 ? nominalChargeCapacity! : fullChargeCapacity
+        return min(Double(basis) / Double(designCapacity) * 100, 100)
     }
 
     /// |voltage * amperage| / 1_000_000

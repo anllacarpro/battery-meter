@@ -12,6 +12,9 @@ struct HealthView: View {
                 Section {
                     row("Design capacity", "\(reading.designCapacity.formatted()) mAh")
                     row("Full charge capacity", "\(reading.fullChargeCapacity.formatted()) mAh")
+                    if let nominal = reading.nominalChargeCapacity, nominal > 0 {
+                        row("Nominal charge capacity", "\(nominal.formatted()) mAh")
+                    }
                     row("Health", BatteryFormat.percent(reading.healthPercent))
                     row("Cycle count", BatteryFormat.cycles(reading))
                 } header: {
@@ -21,6 +24,12 @@ struct HealthView: View {
                         .foregroundStyle(.primary)
                         .padding(.leading, -10)
                         .padding(.bottom, 8)
+                }
+                if let message = ServiceAdvice.advice(for: reading).message {
+                    Section {
+                        Label(message, systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 Section("Electrical") {
                     row("Voltage", "\(reading.voltage.formatted()) mV")

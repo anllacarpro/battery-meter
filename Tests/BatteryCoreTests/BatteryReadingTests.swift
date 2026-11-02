@@ -16,4 +16,54 @@ import Foundation
         #expect(abs(r.remainingWattHours - 17.204) < 0.001)
         #expect(abs(r.fullWattHours - 51.954) < 0.001)
     }
+
+    @Test func healthNeverExceedsOneHundred() {
+        // A new cell can measure slightly above its design capacity (4666 vs 4629 mAh).
+        let r = BatteryReading(
+            timestamp: Date(timeIntervalSince1970: 0),
+            percent: 61, remainingCapacity: 2710, fullChargeCapacity: 4666,
+            designCapacity: 4629, cycleCount: 9, designCycleCount: 1000,
+            voltage: 11853, amperage: -662, isCharging: false,
+            externalConnected: false, fullyCharged: false)
+        #expect(r.healthPercent == 100)
+    }
+
+    private func reading(full: Int, nominal: Int?) -> BatteryReading {
+        BatteryReading(
+            timestamp: Date(timeIntervalSince1970: 0),
+            percent: 50, remainingCapacity: 2000, fullChargeCapacity: full,
+            designCapacity: 4629, cycleCount: 9, designCycleCount: 1000,
+            voltage: 11853, amperage: -662, isCharging: false,
+            externalConnected: false, fullyCharged: false, nominalChargeCapacity: nominal)
+    }
+
+    @Test func healthUsesNominalCapacityWhenPresent() {
+        #expect(abs(reading(full: 4666, nominal: 4400).healthPercent - 95.06) < 0.01)
+    }
+
+    @Test func healthFallsBackToFullChargeWhenNominalMissing() {
+        #expect(abs(reading(full: 4575, nominal: nil).healthPercent - 98.83) < 0.01)
+    }
+
+    @Test func zeroNominalCountsAsMissing() {
+        #expect(abs(reading(full: 4575, nominal: 0).healthPercent - 98.83) < 0.01)
+    }
+
+    @Test func nominalAboveDesignCapsAtOneHundred() {
+        #expect(reading(full: 4666, nominal: 4771).healthPercent == 100)
+    }
+
+    @Test func legacyLineWithoutNominalDecodesAndFallsBack() throws {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(reading(full: 4575, nominal: 4400))
+        var object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        object.removeValue(forKey: "nominalChargeCapacity")
+        let legacy = try JSONSerialization.data(withJSONObject: object)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(BatteryReading.self, from: legacy)
+        #expect(decoded.nominalChargeCapacity == nil)
+        #expect(abs(decoded.healthPercent - 98.83) < 0.01)
+    }
 }

@@ -40,7 +40,8 @@ public enum BatteryParser {
             adapterWatts: int(adapter?["Watts"]),
             notChargingReason: int(charger?["NotChargingReason"]),
             osMinutesToEmpty: minutes(raw["AvgTimeToEmpty"]),
-            osMinutesToFull: minutes(raw["AvgTimeToFull"])
+            osMinutesToFull: minutes(raw["AvgTimeToFull"]),
+            nominalChargeCapacity: int(battery["NominalChargeCapacity"])
         )
     }
 

@@ -43,6 +43,16 @@ private func ownerSample() -> [String: Any] {
         #expect(r.isCharging == false)
         #expect(r.notChargingReason == 128)
         #expect(r.adapterWatts == nil)
+        #expect(r.nominalChargeCapacity == nil)
+    }
+
+    @Test func parsesNominalChargeCapacity() throws {
+        var raw = ownerSample()
+        var battery = raw["BatteryData"] as! [String: Any]
+        battery["NominalChargeCapacity"] = 4785
+        raw["BatteryData"] = battery
+        let r = try #require(BatteryParser.parse(raw, at: date))
+        #expect(r.nominalChargeCapacity == 4785)
     }
 
     @Test func timestampTruncatedToWholeSeconds() throws {
