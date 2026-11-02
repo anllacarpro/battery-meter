@@ -53,10 +53,15 @@ public struct SleepReport: Equatable, Sendable {
         for e in sorted {
             switch e.kind {
             case .sleep:
-                // A new sleep restarts the period; a sleep with no wake is dropped.
-                open = e
-                allOnBattery = e.onBattery
-                darkWakes = 0
+                // Sleep -> DarkWake -> Sleep chains are one period: only the first
+                // sleep after a wake opens it, and later sleeps just extend it.
+                if open == nil {
+                    open = e
+                    allOnBattery = e.onBattery
+                    darkWakes = 0
+                } else {
+                    allOnBattery = allOnBattery && e.onBattery
+                }
             case .darkWake:
                 guard open != nil else { continue }
                 darkWakes += 1

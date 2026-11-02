@@ -111,4 +111,17 @@ import Foundation
             WakeReasonCount(reason: .lid, count: 1),
         ])
     }
+
+    @Test func darkWakeSleepChainIsOnePeriod() {
+        var events = [event(10, .sleep, charge: 66)]
+        for i in 1...5 {
+            events.append(event(10 - Double(i) * 0.5, .darkWake, charge: 66))
+            events.append(event(10 - Double(i) * 0.5 + 0.01, .sleep, charge: 66))
+        }
+        events.append(event(1, .wake, charge: 64, reason: .lid))
+        let report = SleepReport.build(events: events, now: now)
+        #expect(report.periods.count == 1)
+        #expect(report.periods[0].darkWakes == 5)
+        #expect(report.periods[0].percentLost == 2)
+    }
 }
