@@ -95,4 +95,55 @@ private func headline(_ est: PowerEstimator) -> TimeInterval? { est.runtime?.hea
         _ = est.update(with: reading(at: now.addingTimeInterval(10), watts: 5, external: true))
         #expect(abs(est.recentWatts! - 5) < 1e-9)
     }
+
+    @Test func evenCountMedianAveragesMiddlePair() throws {
+        let history = (0..<32).map {
+            reading(at: now.addingTimeInterval(-TimeInterval($0 * 60)), watts: 5 + Double($0 % 4))
+        }  // eight each of 5, 6, 7, 8 W
+        let typical = try #require(TypicalDraw.watts(in: history, now: now))
+        #expect(abs(typical - 6.5) < 0.01)
+    }
+
+    @Test func futureReadingsAreExcluded() throws {
+        var history = (0..<30).map {
+            reading(at: now.addingTimeInterval(-TimeInterval($0 * 60)), watts: 5)
+        }
+        history += (0..<40).map { reading(at: now.addingTimeInterval(60 + TimeInterval($0)), watts: 90) }
+        let typical = try #require(TypicalDraw.watts(in: history, now: now))
+        #expect(abs(typical - 5) < 0.01)
+    }
+
+    @Test func sevenDayWindowBoundary() throws {
+        let base = (0..<30).map {
+            reading(at: now.addingTimeInterval(-TimeInterval($0 * 60)), watts: 5)
+        }
+        func extras(ageHours: Double) -> [BatteryReading] {
+            (0..<40).map {
+                reading(at: now.addingTimeInterval(-ageHours * 3_600 - TimeInterval($0)), watts: 50)
+            }
+        }
+        let inside = try #require(TypicalDraw.watts(in: base + extras(ageHours: 6 * 24 + 23), now: now))
+        #expect(abs(inside - 50) < 0.01)
+        let outside = try #require(TypicalDraw.watts(in: base + extras(ageHours: 7 * 24 + 1), now: now))
+        #expect(abs(outside - 5) < 0.01)
+    }
+
+    @Test func highUseBoundaries() throws {
+        func isHighUse(pace: Double, typical: Double) throws -> Bool {
+            var est = PowerEstimator()
+            _ = est.update(with: reading(at: now, watts: pace), typicalWatts: typical)
+            return try #require(est.runtime).isHighUse
+        }
+        #expect(try isHighUse(pace: 10, typical: 5))        // exactly 10 W and exactly 2x
+        #expect(try !isHighUse(pace: 9.99, typical: 4))     // just under 10 W
+        #expect(try !isHighUse(pace: 10, typical: 5.01))    // just under 2x
+    }
+
+    @Test func recentWattsResetsAfterGap() {
+        var est = PowerEstimator()
+        for i in 0...60 { _ = est.update(with: reading(at: now.addingTimeInterval(TimeInterval(i * 10)), watts: 20)) }
+        #expect(abs(est.recentWatts! - 20) < 1e-9)
+        _ = est.update(with: reading(at: now.addingTimeInterval(600 + 400), watts: 2))
+        #expect(abs(est.recentWatts! - 2) < 1e-9)
+    }
 }
