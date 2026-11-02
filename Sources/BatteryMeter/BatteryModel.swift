@@ -85,15 +85,19 @@ final class BatteryModel {
         let loaded = await Task.detached(priority: .utility) {
             let readings = store.load(since: cutoff)
             if pruning { try? store.prune(olderThan: cutoff) }
-            return (readings, FullChargeLearner.estimate(history: readings, current: nil, liveWatts: nil))
+            return (readings: readings,
+                    times: Set(readings.map(\.timestamp)),
+                    learned: FullChargeLearner.estimate(history: readings, current: nil, liveWatts: nil))
         }.value
         guard gen == generation else { return }
-        // A reload can race the recorder: keep readings appended after the file was read.
-        let lastLoaded = loaded.0.last?.timestamp ?? .distantPast
-        let recorded = history.filter { $0.timestamp > lastLoaded }
-        history = loaded.0 + recorded
+        // A reload can race the recorder: keep in-memory readings the file read missed.
+        // Timestamps are whole seconds (see BatteryParser), so a reading in memory and its
+        // stored copy match exactly, and membership (unlike "newer than the last line")
+        // still holds after the clock is set back.
+        let recorded = history.filter { !loaded.times.contains($0.timestamp) }
+        history = loaded.readings + recorded
         learned = recorded.isEmpty
-            ? loaded.1
+            ? loaded.learned
             : FullChargeLearner.estimate(history: history, current: nil, liveWatts: nil)
         coveredDays = days
         historyLoaded = true

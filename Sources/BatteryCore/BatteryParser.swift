@@ -4,6 +4,8 @@ public enum BatteryParser {
     /// Sentinel the SMC reports when a time estimate is unavailable.
     private static let unknownMinutes = 65535
 
+    /// The timestamp is truncated to whole seconds: the history file stores ISO 8601 dates
+    /// without fractions, so a reading in memory and its stored copy compare equal.
     public static func parse(_ raw: [String: Any], at date: Date) -> BatteryReading? {
         guard
             let battery = raw["BatteryData"] as? [String: Any],
@@ -23,7 +25,7 @@ public enum BatteryParser {
         let charger = raw["ChargerData"] as? [String: Any]
 
         return BatteryReading(
-            timestamp: date,
+            timestamp: Date(timeIntervalSince1970: date.timeIntervalSince1970.rounded(.down)),
             percent: percent,
             remainingCapacity: remaining,
             fullChargeCapacity: full,

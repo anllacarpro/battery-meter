@@ -45,6 +45,21 @@ private func ownerSample() -> [String: Any] {
         #expect(r.adapterWatts == nil)
     }
 
+    @Test func timestampTruncatedToWholeSeconds() throws {
+        let r = try #require(BatteryParser.parse(ownerSample(), at: Date(timeIntervalSince1970: 1_000.873)))
+        #expect(r.timestamp == date)
+    }
+
+    @Test func parsedReadingRoundTripsThroughStoreExactly() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("BatteryParserTests-\(UUID().uuidString).jsonl")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = HistoryStore(fileURL: url)
+        let r = try #require(BatteryParser.parse(ownerSample(), at: Date(timeIntervalSince1970: 1_700_000_123.456)))
+        try store.append(r)
+        #expect(store.load(since: .distantPast) == [r])
+    }
+
     @Test func missingAdapterWattsIsNil() throws {
         let r = try #require(BatteryParser.parse(ownerSample(), at: date))
         #expect(r.adapterWatts == nil)
