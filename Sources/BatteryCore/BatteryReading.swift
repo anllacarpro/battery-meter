@@ -43,9 +43,10 @@ public struct BatteryReading: Codable, Sendable, Equatable {
         self.osMinutesToFull = osMinutesToFull
     }
 
-    /// fullChargeCapacity / designCapacity * 100
+    /// fullChargeCapacity / designCapacity * 100, capped at 100: a new cell can measure
+    /// slightly above its design capacity, which isn't "better than new" (macOS caps it too).
     public var healthPercent: Double {
-        designCapacity > 0 ? Double(fullChargeCapacity) / Double(designCapacity) * 100 : 0
+        designCapacity > 0 ? min(Double(fullChargeCapacity) / Double(designCapacity) * 100, 100) : 0
     }
 
     /// |voltage * amperage| / 1_000_000
