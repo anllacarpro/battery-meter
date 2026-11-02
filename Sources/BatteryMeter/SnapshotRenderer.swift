@@ -241,7 +241,7 @@ private enum SampleReport {
 
         let charging = ChargingReport(
             chargeCount: 11, typicalPlugInPercent: 34, typicalUnplugPercent: 96,
-            averageDailyTimeAtFull: 2.6 * hour, cyclesPerWeek: 2.8, usualChargerWatts: 70)
+            averageDailyTimeAtFull: 2.6 * hour, timeAtFullDays: 7, cyclesPerWeek: 2.8, usualChargerWatts: 70)
 
         let periods = [(1, 23.2, 8.1, 3, 2), (2, 22.5, 7.4, 2, 1), (3, 13.0, 2.2, 1, 0),
                        (4, 23.8, 9.0, 4, 3), (5, 0.4, 7.9, 3, 1)].map { d, from, length, lost, dark in
@@ -259,9 +259,10 @@ private enum SampleReport {
                     ("Mail", 0.11), ("Music", 0.09), ("Finder", 0.07), ("Messages", 0.06), ("Terminal", 0.004)]
             .map { AppShare(name: $0.0, share: $0.1) }
 
+        let points = DailyHealth.points(in: history)
         return BatteryReport(
             generated: now, usage: UsageReport(days: days, weeks: weeks), sessions: sessions,
-            charging: charging, health: HealthTrend.build(points: DailyHealth.points(in: history)),
+            charging: charging, health: HealthTrend.build(points: points), healthPoints: points,
             sleep: sleep, apps: apps)
     }
 }

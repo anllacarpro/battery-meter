@@ -8,28 +8,33 @@ public struct BatteryReport: Equatable, Sendable {
     public var sessions: [DischargeSession]          // newest first
     public var charging: ChargingReport
     public var health: HealthTrend
+    public var healthPoints: [HealthPoint]           // daily health, oldest first; what `health` is fitted to
     public var sleep: SleepReport
     public var apps: [AppShare]
 
     public init(generated: Date, usage: UsageReport, sessions: [DischargeSession],
-                charging: ChargingReport, health: HealthTrend, sleep: SleepReport, apps: [AppShare]) {
+                charging: ChargingReport, health: HealthTrend, healthPoints: [HealthPoint],
+                sleep: SleepReport, apps: [AppShare]) {
         self.generated = generated
         self.usage = usage
         self.sessions = sessions
         self.charging = charging
         self.health = health
+        self.healthPoints = healthPoints
         self.sleep = sleep
         self.apps = apps
     }
 
     public static func build(history: [BatteryReading], powerEvents: [PowerEvent],
                              appEnergy: [String: [String: Double]], now: Date, calendar: Calendar) -> BatteryReport {
-        BatteryReport(
+        let points = DailyHealth.points(in: history)
+        return BatteryReport(
             generated: now,
             usage: UsageReport.build(history: history, now: now, calendar: calendar),
             sessions: FullChargeLearner.sessions(in: history).reversed(),
             charging: ChargingReport.build(history: history, now: now),
-            health: HealthTrend.build(points: DailyHealth.points(in: history)),
+            health: HealthTrend.build(points: points),
+            healthPoints: points,
             sleep: SleepReport.build(events: powerEvents, now: now),
             apps: AppEnergyReport.build(days: appEnergy, now: now, calendar: calendar))
     }

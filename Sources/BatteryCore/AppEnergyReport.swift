@@ -34,19 +34,18 @@ public enum AppEnergyReport {
         makeDayFormatter(timeZone: calendar.timeZone).string(from: date)
     }
 
-    /// The name as shown: drops invisible format and control characters (the U+200E mark
-    /// and U+2066–2069 isolates some apps carry in their localized name) and trims
-    /// whitespace. Applied before storing and again when reporting, so names stored before
-    /// this cleanup merge with their clean form.
+    /// The name as shown: drops bidi and invisible marks (U+200E/F, U+202A–202E,
+    /// U+2066–2069, U+FEFF; some apps carry them in their localized name) and trims
+    /// surrounding whitespace. Joiners (U+200C/D) are kept: they shape real names. Applied
+    /// before storing and again when reporting, so names stored before this cleanup merge
+    /// with their clean form.
     public static func cleanName(_ name: String) -> String {
-        let kept = name.unicodeScalars.filter {
-            switch $0.properties.generalCategory {
-            case .format, .control: false
-            default: true
-            }
-        }
+        let kept = name.unicodeScalars.filter { !invisibleMarks.contains($0.value) }
         return String(String.UnicodeScalarView(kept)).trimmingCharacters(in: .whitespacesAndNewlines)
     }
+
+    private static let invisibleMarks: Set<UInt32> =
+        [0x200E, 0x200F, 0x202A, 0x202B, 0x202C, 0x202D, 0x202E, 0x2066, 0x2067, 0x2068, 0x2069, 0xFEFF]
 
     /// Each app's share of the total energy impact over today and the 6 days before it,
     /// top 8, descending. Ties sort by name for a deterministic result.

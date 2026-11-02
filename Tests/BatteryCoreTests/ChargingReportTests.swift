@@ -34,7 +34,19 @@ import Foundation
         let report = ChargingReport.build(history: history, now: now)
         let value = report.averageDailyTimeAtFull
         #expect(value != nil)
-        #expect(abs((value ?? 0) - 7200.0 / 7.0) <= 1)
+        // Two hours of history cover one day, so the average is over 1 day, not 7.
+        #expect(abs((value ?? 0) - 7200.0) <= 1)
+        #expect(report.timeAtFullDays == 1)
+    }
+
+    @Test func timeAtFullAveragesOverCoveredDays() {
+        // Two days of history; one hour of it at 100% on AC.
+        let start = now.addingTimeInterval(-2 * 86_400)
+        var history = [reading(start, percent: 60, ac: false)]
+        history += (0...60).map { reading(now.addingTimeInterval(-3600 + Double($0) * 60), percent: 100, ac: true) }
+        let report = ChargingReport.build(history: history, now: now)
+        #expect(report.timeAtFullDays == 2)
+        #expect(abs((report.averageDailyTimeAtFull ?? 0) - 1800) <= 1)
     }
 
     @Test func cyclesPerWeekNeedsAWeek() {
@@ -233,6 +245,7 @@ import Foundation
         #expect(report.typicalPlugInPercent == nil)
         #expect(report.typicalUnplugPercent == nil)
         #expect(report.averageDailyTimeAtFull == nil)
+        #expect(report.timeAtFullDays == nil)
         #expect(report.cyclesPerWeek == nil)
         #expect(report.usualChargerWatts == nil)
     }
@@ -253,6 +266,7 @@ import Foundation
         #expect(report.typicalPlugInPercent == nil)
         #expect(report.typicalUnplugPercent == nil)
         #expect(report.averageDailyTimeAtFull == nil)
+        #expect(report.timeAtFullDays == nil)
         #expect(report.cyclesPerWeek == nil)
         #expect(report.usualChargerWatts == nil)
     }

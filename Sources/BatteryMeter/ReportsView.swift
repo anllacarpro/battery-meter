@@ -17,7 +17,7 @@ struct ReportsView: View {
                         UsageSection(usage: report.usage, battery: battery, hover: hover)
                         SessionsSection(sessions: report.sessions, reports: reports)
                         ChargingSection(charging: report.charging)
-                        HealthTrendSection(trend: report.health, battery: battery, hover: hover)
+                        HealthTrendSection(trend: report.health, points: report.healthPoints, hover: hover)
                         SleepSection(sleep: report.sleep)
                         AppsSection(apps: report.apps)
                     }

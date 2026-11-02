@@ -4,16 +4,19 @@ public struct ChargingReport: Equatable, Sendable {
     public var chargeCount: Int                       // AC runs in the last 28 days
     public var typicalPlugInPercent: Int?             // median
     public var typicalUnplugPercent: Int?             // median
-    public var averageDailyTimeAtFull: TimeInterval?  // over the last 7 days; nil if no AC data in them
+    public var averageDailyTimeAtFull: TimeInterval?  // per covered day of the last 7; nil if no AC data in them
+    public var timeAtFullDays: Int?                   // days averaged over (1...7); nil when the average is nil
     public var cyclesPerWeek: Double?                 // nil if the window spans less than 7 days
     public var usualChargerWatts: Int?                // mode of adapterWatts on AC
 
     public init(chargeCount: Int, typicalPlugInPercent: Int?, typicalUnplugPercent: Int?,
-                averageDailyTimeAtFull: TimeInterval?, cyclesPerWeek: Double?, usualChargerWatts: Int?) {
+                averageDailyTimeAtFull: TimeInterval?, timeAtFullDays: Int?,
+                cyclesPerWeek: Double?, usualChargerWatts: Int?) {
         self.chargeCount = chargeCount
         self.typicalPlugInPercent = typicalPlugInPercent
         self.typicalUnplugPercent = typicalUnplugPercent
         self.averageDailyTimeAtFull = averageDailyTimeAtFull
+        self.timeAtFullDays = timeAtFullDays
         self.cyclesPerWeek = cyclesPerWeek
         self.usualChargerWatts = usualChargerWatts
     }
@@ -66,6 +69,13 @@ public struct ChargingReport: Equatable, Sendable {
             fullTime += gap(a, b)
         }
         let hasRecentAC = sorted.contains { $0.timestamp >= weekStart && $0.externalConnected }
+        // Average over the days the history actually covers in the last 7, not always 7,
+        // so a two-day-old install isn't diluted by five days it never saw.
+        var fullDays: Int?
+        if hasRecentAC, let oldest = sorted.first {
+            let covered = now.timeIntervalSince(max(oldest.timestamp, weekStart)) / day
+            fullDays = min(7, max(1, Int(covered.rounded(.up))))
+        }
 
         // Cycles per week across the window, only once it spans a full week.
         var cycles: Double?
@@ -89,7 +99,8 @@ public struct ChargingReport: Equatable, Sendable {
             chargeCount: runCount,
             typicalPlugInPercent: median(plugIns),
             typicalUnplugPercent: median(unplugs),
-            averageDailyTimeAtFull: hasRecentAC ? fullTime / 7 : nil,
+            averageDailyTimeAtFull: fullDays.map { fullTime / Double($0) },
+            timeAtFullDays: fullDays,
             cyclesPerWeek: cycles,
             usualChargerWatts: charger)
     }

@@ -184,6 +184,13 @@ import Foundation
         #expect(AppEnergyReport.cleanName("\u{2068}Safari\u{2069} ") == "Safari")
         #expect(AppEnergyReport.cleanName("  Claude Helper (R\n") == "Claude Helper (R")
         #expect(AppEnergyReport.cleanName("\u{200E} ").isEmpty)
+        #expect(AppEnergyReport.cleanName("\u{FEFF}\u{202B}Notes\u{202C}\u{200F}") == "Notes")
+    }
+
+    @Test func cleanNameKeepsJoiners() {
+        let zwj = "Dev\u{200D}Tools \u{200C}Beta"
+        #expect(AppEnergyReport.cleanName("\u{2068}" + zwj + "\u{2069}") == zwj)
+        #expect(AppEnergyReport.cleanName("\u{200D}x") == "\u{200D}x")
     }
 
     @Test func reportMergesNamesThatDifferOnlyByInvisibleCharacters() {

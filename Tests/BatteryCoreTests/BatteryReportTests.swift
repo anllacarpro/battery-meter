@@ -52,6 +52,8 @@ import Foundation
         #expect(report.usage == UsageReport.build(history: history, now: Self.now, calendar: Self.calendar))
         #expect(report.charging == ChargingReport.build(history: history, now: Self.now))
         #expect(report.health == HealthTrend.build(points: DailyHealth.points(in: history)))
+        #expect(report.healthPoints == DailyHealth.points(in: history))
+        #expect(!report.healthPoints.isEmpty)
         #expect(report.sleep == SleepReport.build(events: Self.events, now: Self.now))
         #expect(report.apps == AppEnergyReport.build(days: Self.appEnergy, now: Self.now, calendar: Self.calendar))
         #expect(!report.apps.isEmpty)

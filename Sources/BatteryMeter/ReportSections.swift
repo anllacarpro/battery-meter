@@ -43,7 +43,7 @@ struct UsageSection: View {
         ChartCard(title: "Usage", subtitle: "Time on battery each day, last 7 days") {
             if usage.hasData {
                 VStack(alignment: .leading, spacing: 14) {
-                    UsageChart(days: usage.days, hover: hover)
+                    UsageChart(days: usage.days, recordedFrom: firstReading, hover: hover)
                         .frame(height: 150)
                     let weeks = recordedWeeks
                     VStack(alignment: .leading, spacing: 6) {
@@ -67,8 +67,12 @@ struct UsageSection: View {
         }
     }
 
+    /// Days and weeks that ended before this were never recorded, so they're left out
+    /// rather than shown as zero.
+    private var firstReading: Date { battery.history.first?.timestamp ?? .distantPast }
+
     private var recordedWeeks: [(title: String, week: UsagePeriod)] {
-        let firstReading = battery.history.first?.timestamp ?? .distantPast
+        let firstReading = self.firstReading
         let cal = Calendar.current
         return usage.weeks.enumerated().compactMap { index, week in
             let end = cal.date(byAdding: .weekOfYear, value: 1, to: week.start) ?? week.start
@@ -95,14 +99,20 @@ struct UsageSection: View {
 
 private struct UsageChart: View {
     let days: [UsagePeriod]
+    let recordedFrom: Date
     @Bindable var hover: ChartHover
 
     var body: some View {
+        let cal = Calendar.current
+        // Today always counts; earlier days only if they end after the first reading.
+        let recorded = days.enumerated().filter { index, day in
+            index == days.count - 1 || (cal.date(byAdding: .day, value: 1, to: day.start) ?? day.start) > recordedFrom
+        }.map(\.element)
         let selected = hover.usageDay.flatMap { date in
-            days.first { Calendar.current.isDate($0.start, inSameDayAs: date) }
+            recorded.first { cal.isDate($0.start, inSameDayAs: date) }
         }
         Chart {
-            ForEach(days, id: \.start) { day in
+            ForEach(recorded, id: \.start) { day in
                 BarMark(x: .value("Day", day.start, unit: .day),
                         y: .value("Hours", day.batteryTime / 3600),
                         width: .ratio(0.55))
@@ -122,6 +132,7 @@ private struct UsageChart: View {
                     }
             }
         }
+        .chartXScale(domain: xDomain)
         .chartYScale(domain: 0...yAxis.max)
         .chartXAxis {
             AxisMarks(values: .stride(by: .day)) { _ in
@@ -138,6 +149,13 @@ private struct UsageChart: View {
         }
         .chartXSelection(value: $hover.usageDay)
         .accessibilityLabel("Time on battery by day")
+    }
+
+    /// Always the full 7 days, so unrecorded days keep their (empty) slot.
+    private var xDomain: ClosedRange<Date> {
+        let first = days.first?.start ?? .now
+        let last = days.last?.start ?? first
+        return first...(Calendar.current.date(byAdding: .day, value: 1, to: last) ?? last)
     }
 
     /// Whole ticks at most 4 steps apart: 15 m steps for a light week, hours for a full one.
@@ -239,8 +257,9 @@ struct ChargingSection: View {
                 result.append(Tile(title: "Unplug at", value: "\(p)%", caption: "typical"))
             }
         }
-        if let t = charging.averageDailyTimeAtFull {
-            result.append(Tile(title: "At 100% on power", value: DurationText.short(t), caption: "a day, last 7 days"))
+        if let t = charging.averageDailyTimeAtFull, let days = charging.timeAtFullDays {
+            result.append(Tile(title: "At 100% on power", value: DurationText.short(t),
+                               caption: days == 1 ? "a day, today" : "a day, last \(days) days"))
         }
         if let c = charging.cyclesPerWeek {
             result.append(Tile(title: "Cycles added", value: c.formatted(.number.precision(.fractionLength(1))),
@@ -257,8 +276,8 @@ struct ChargingSection: View {
 
 struct HealthTrendSection: View {
     let trend: HealthTrend
-    /// Read here, not in `ReportsView`, so a new history reading only redraws this card.
-    let battery: BatteryModel
+    /// Built off the main thread with the report; the trend is fitted to these same points.
+    let points: [HealthPoint]
     let hover: ChartHover
 
     var body: some View {
@@ -280,7 +299,6 @@ struct HealthTrendSection: View {
             Text(sentence)
                 .font(.title3)
                 .fixedSize(horizontal: false, vertical: true)
-            let points = DailyHealth.points(in: battery.history)
             if points.count >= HistoryData.minPoints, let first = points.first, let last = points.last {
                 HealthChart(points: points,
                             domain: first.day...max(last.day, first.day.addingTimeInterval(86_400)),

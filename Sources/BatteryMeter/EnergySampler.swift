@@ -50,8 +50,10 @@ final class EnergySampler {
         guard !rows.isEmpty else { return }
         var impacts: [String: Double] = [:]
         for row in rows {
-            let name = AppEnergyReport.cleanName(
-                NSRunningApplication(processIdentifier: row.pid)?.localizedName ?? row.command)
+            // A localized name that is only marks falls back to the process name.
+            let localized = AppEnergyReport.cleanName(
+                NSRunningApplication(processIdentifier: row.pid)?.localizedName ?? "")
+            let name = localized.isEmpty ? AppEnergyReport.cleanName(row.command) : localized
             guard !name.isEmpty else { continue }
             impacts[name, default: 0] += row.power * Self.interval
         }
