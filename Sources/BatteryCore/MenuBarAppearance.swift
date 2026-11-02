@@ -37,7 +37,9 @@ public enum MenuBarAppearance {
         switch state {
         case .onBattery(let timeLeft):
             guard let timeLeft else { return "\(base), on battery" }
-            return "\(base), about \(spelledDuration(timeLeft)) left"
+            let spelled = spelledDuration(timeLeft)
+            let about = spelled.hasPrefix("less than") ? "" : "about "
+            return "\(base), \(about)\(spelled) left"
         case .charging(let timeToFull):
             guard let timeToFull else { return "\(base), charging" }
             return "\(base), charging, \(spelledDuration(timeToFull)) to full"

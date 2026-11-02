@@ -26,6 +26,11 @@ import Testing
         #expect(!MenuBarAppearance.isLow(percent: 11, state: onBattery))
     }
 
+    @Test func accessibilityLabelNearEmptyDropsAbout() {
+        #expect(MenuBarAppearance.accessibilityLabel(percent: 5, state: .onBattery(timeLeft: 60))
+            == "Battery 5 percent, less than 5 minutes left")
+    }
+
     @Test func accessibilityLabels() {
         #expect(MenuBarAppearance.accessibilityLabel(percent: 75, state: .onBattery(timeLeft: 5 * 3600 + 30 * 60))
             == "Battery 75 percent, about 5 hours 30 minutes left")
