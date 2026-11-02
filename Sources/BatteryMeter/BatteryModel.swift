@@ -20,6 +20,9 @@ final class BatteryModel {
     @ObservationIgnored private let store: HistoryStore
     @ObservationIgnored private var estimator = PowerEstimator()
     @ObservationIgnored private var timer: Timer?
+    /// Held for the app's lifetime so App Nap can't stretch the 10 s timer past the
+    /// 300 s gap rule (which would split every session). Idle system sleep is still allowed.
+    @ObservationIgnored private var activity: NSObjectProtocol?
     @ObservationIgnored private var historyLoaded = false
     /// Days of history `history` currently covers (0 until the first load lands).
     @ObservationIgnored private var coveredDays = 0
@@ -47,6 +50,8 @@ final class BatteryModel {
 
     func start() {
         guard timer == nil else { return }
+        activity = ProcessInfo.processInfo.beginActivity(
+            options: [.userInitiatedAllowingIdleSystemSleep], reason: "Battery sampling")
         refresh(record: true)
         let timer = Timer(timeInterval: Self.readInterval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.refresh(record: true) }
