@@ -44,7 +44,7 @@ public enum TopEnergyParser {
               let pid = Int32(trimmed[..<firstSpace]) else { return nil }
         let rest = trimmed[firstSpace...].trimmingCharacters(in: .whitespaces)
         guard let lastSpace = rest.lastIndex(where: \.isWhitespace),
-              let power = Double(rest[rest.index(after: lastSpace)...]) else { return nil }
+              let power = Double(rest[rest.index(after: lastSpace)...]), power.isFinite else { return nil }
         let command = rest[..<lastSpace].trimmingCharacters(in: .whitespaces)
         guard !command.isEmpty else { return nil }
         return ProcessPower(pid: pid, command: command, power: power)

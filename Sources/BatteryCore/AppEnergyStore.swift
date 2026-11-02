@@ -22,16 +22,19 @@ public struct AppEnergyStore: Sendable {
     private static let retentionDays = 30
 
     /// Merge-adds `impacts` into `day`, prunes days older than 30 relative to `day`, and
-    /// writes atomically. Throws if the file exists but cannot be read (so existing days
+    /// (or today, if earlier) and writes atomically. Throws if the file exists but cannot be read (so existing days
     /// are never overwritten by a transient error). A missing file starts empty; an
     /// undecodable file is replaced.
-    public func add(_ impacts: [String: Double], on day: String) throws {
+    public func add(_ impacts: [String: Double], on day: String, now: Date = Date()) throws {
         try queue.sync {
             var days = try readExisting()
             var today = days[day] ?? [:]
             for (app, value) in impacts { today[app, default: 0] += value }
             days[day] = today
-            if let cutoff = Self.cutoffKey(for: day) {
+            // Prune relative to the earlier of `day` and today, so a far-future day (clock
+            // skew) cannot wipe valid history.
+            let todayKey = AppEnergyReport.dayKey(for: now, calendar: .current)
+            if let cutoff = Self.cutoffKey(for: min(day, todayKey)) {
                 days = days.filter { $0.key >= cutoff }
             }
             try FileManager.default.createDirectory(
@@ -59,16 +62,13 @@ public struct AppEnergyStore: Sendable {
         return (try? JSONDecoder().decode([String: [String: Double]].self, from: data)) ?? [:]
     }
 
-    /// The oldest day key to keep: `day` minus 30 days, using timezone-free date arithmetic
-    /// (day keys are plain calendar dates, so UTC is only a neutral frame).
+    /// The oldest day key to keep: `day` minus 30 days. Keys are plain calendar dates, so UTC
+    /// is only a neutral frame; the format comes from the shared day-key formatter.
     private static func cutoffKey(for day: String) -> String? {
+        let utc = TimeZone(identifier: "UTC")!
         var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(identifier: "UTC")!
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.calendar = cal
-        f.timeZone = cal.timeZone
-        f.dateFormat = "yyyy-MM-dd"
+        cal.timeZone = utc
+        let f = AppEnergyReport.makeDayFormatter(timeZone: utc)
         guard let date = f.date(from: day),
               let cutoff = cal.date(byAdding: .day, value: -retentionDays, to: date) else { return nil }
         return f.string(from: cutoff)

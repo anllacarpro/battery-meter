@@ -14,15 +14,24 @@ public enum AppEnergyReport {
     private static let dayCount = 7
     private static let maxApps = 8
 
-    /// The store's day key for `date`: local `yyyy-MM-dd` in the calendar's time zone.
-    /// Shared by the report and by whatever records into `AppEnergyStore`.
-    public static func dayKey(for date: Date, calendar: Calendar) -> String {
+    /// The single definition of the day-key format: Gregorian `yyyy-MM-dd` (en_US_POSIX) in
+    /// `timeZone`, regardless of the user's calendar (Buddhist, Japanese...), so keys always
+    /// sort lexicographically as dates.
+    static func makeDayFormatter(timeZone: TimeZone) -> DateFormatter {
+        var gregorian = Calendar(identifier: .gregorian)
+        gregorian.timeZone = timeZone
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
-        f.calendar = calendar
-        f.timeZone = calendar.timeZone
+        f.calendar = gregorian
+        f.timeZone = timeZone
         f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: date)
+        return f
+    }
+
+    /// The store's day key for `date`: `yyyy-MM-dd` in the calendar's time zone (always
+    /// Gregorian). Shared by the report and by whatever records into `AppEnergyStore`.
+    public static func dayKey(for date: Date, calendar: Calendar) -> String {
+        makeDayFormatter(timeZone: calendar.timeZone).string(from: date)
     }
 
     /// Each app's share of the total energy impact over today and the 6 days before it,

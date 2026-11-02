@@ -63,7 +63,29 @@ import Foundation
         #expect(out == [ProcessPower(pid: 2, command: "busy", power: 3.5)])
     }
 
+    @Test func nonFinitePowerRejected() {
+        let sample = """
+            PID COMMAND POWER
+            PID COMMAND POWER
+            1 infinite inf
+            2 notnum nan
+            3 fine 2.5
+
+            """
+        #expect(TopEnergyParser.parse(sample) == [ProcessPower(pid: 3, command: "fine", power: 2.5)])
+    }
+
     // MARK: store
+
+    @Test func farFutureDayDoesNotWipeHistory() throws {
+        let store = AppEnergyStore(fileURL: makeURL())
+        let now = Date(timeIntervalSince1970: 1_793_620_800) // 2026-11-02
+        try store.add(["A": 1], on: "2026-10-30", now: now)
+        try store.add(["A": 2], on: "2026-11-02", now: now)
+        let future = AppEnergyReport.dayKey(for: now.addingTimeInterval(400 * 86_400), calendar: utc)
+        try store.add(["A": 3], on: future, now: now)
+        #expect(Set(store.load().keys) == ["2026-10-30", "2026-11-02", future])
+    }
 
     @Test func storeMergesAndPrunes() throws {
         let store = AppEnergyStore(fileURL: makeURL())
@@ -122,6 +144,15 @@ import Foundation
         let d = Date(timeIntervalSince1970: 1_767_297_600)
         #expect(AppEnergyReport.dayKey(for: d, calendar: cal) == "2026-01-02")
         #expect(AppEnergyReport.dayKey(for: d, calendar: utc) == "2026-01-01")
+    }
+
+    @Test func dayKeyIgnoresNonGregorianCalendars() {
+        let d = Date(timeIntervalSince1970: 1_793_620_800) // 2026-11-02 12:00 UTC
+        for id in [Calendar.Identifier.buddhist, .japanese, .islamicUmmAlQura] {
+            var cal = Calendar(identifier: id)
+            cal.timeZone = TimeZone(identifier: "UTC")!
+            #expect(AppEnergyReport.dayKey(for: d, calendar: cal) == "2026-11-02")
+        }
     }
 
     @Test func reportTopEightShares() {
