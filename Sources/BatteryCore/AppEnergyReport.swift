@@ -34,6 +34,20 @@ public enum AppEnergyReport {
         makeDayFormatter(timeZone: calendar.timeZone).string(from: date)
     }
 
+    /// The name as shown: drops invisible format and control characters (the U+200E mark
+    /// and U+2066–2069 isolates some apps carry in their localized name) and trims
+    /// whitespace. Applied before storing and again when reporting, so names stored before
+    /// this cleanup merge with their clean form.
+    public static func cleanName(_ name: String) -> String {
+        let kept = name.unicodeScalars.filter {
+            switch $0.properties.generalCategory {
+            case .format, .control: false
+            default: true
+            }
+        }
+        return String(String.UnicodeScalarView(kept)).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     /// Each app's share of the total energy impact over today and the 6 days before it,
     /// top 8, descending. Ties sort by name for a deterministic result.
     public static func build(days: [String: [String: Double]], now: Date, calendar: Calendar) -> [AppShare] {
@@ -41,7 +55,10 @@ public enum AppEnergyReport {
         for offset in 0..<dayCount {
             guard let d = calendar.date(byAdding: .day, value: -offset, to: now),
                   let apps = days[dayKey(for: d, calendar: calendar)] else { continue }
-            for (name, value) in apps { totals[name, default: 0] += value }
+            for (name, value) in apps {
+                let clean = cleanName(name)
+                if !clean.isEmpty { totals[clean, default: 0] += value }
+            }
         }
         totals = totals.filter { $0.value > 0 }
         let grand = totals.values.reduce(0, +)

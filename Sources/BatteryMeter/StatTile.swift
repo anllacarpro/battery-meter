@@ -4,6 +4,9 @@ struct StatTile: View {
     let title: String
     let value: String
     var caption: String? = nil
+    /// Material on the window; Reports cards pass `ChartSurface.card`, since material on
+    /// the card's own fill all but disappears in dark mode.
+    var fill = AnyShapeStyle(.regularMaterial)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -24,7 +27,7 @@ struct StatTile: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(.vertical, 10)
         .padding(.horizontal, 12)
-        .background(.regularMaterial, in: .rect(cornerRadius: 12))
+        .background(fill, in: .rect(cornerRadius: 12))
         .accessibilityElement(children: .combine)
     }
 }

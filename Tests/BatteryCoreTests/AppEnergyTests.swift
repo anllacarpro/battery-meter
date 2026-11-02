@@ -178,4 +178,19 @@ import Foundation
         #expect(AppEnergyReport.build(days: [:], now: Date(), calendar: utc).isEmpty)
         #expect(AppEnergyReport.build(days: ["x": ["A": 0]], now: Date(), calendar: utc).isEmpty)
     }
+
+    @Test func cleanNameDropsInvisibleCharacters() {
+        #expect(AppEnergyReport.cleanName("\u{200E}WhatsApp") == "WhatsApp")
+        #expect(AppEnergyReport.cleanName("\u{2068}Safari\u{2069} ") == "Safari")
+        #expect(AppEnergyReport.cleanName("  Claude Helper (R\n") == "Claude Helper (R")
+        #expect(AppEnergyReport.cleanName("\u{200E} ").isEmpty)
+    }
+
+    @Test func reportMergesNamesThatDifferOnlyByInvisibleCharacters() {
+        let now = Date(timeIntervalSince1970: 1_767_225_600 + 12 * 3600) // 2026-01-01 12:00 UTC
+        let days: [String: [String: Double]] = ["2026-01-01": ["\u{200E}WhatsApp": 1, "WhatsApp": 2, "Mail": 1, "\u{200E}": 5]]
+        let shares = AppEnergyReport.build(days: days, now: now, calendar: utc)
+        #expect(shares.map { $0.name } == ["WhatsApp", "Mail"])
+        #expect(abs(shares[0].share - 0.75) < 1e-9)
+    }
 }

@@ -85,7 +85,7 @@ enum ChartSurface {
     static let rule = Color(nsColor: .tertiaryLabelColor)
 }
 
-private struct ChartCard<Content: View>: View {
+struct ChartCard<Content: View>: View {
     static var minChartHeight: CGFloat { 90 }
 
     let title: String
@@ -121,13 +121,40 @@ private struct CardGroupBoxStyle: GroupBoxStyle {
     }
 }
 
-private struct NotEnoughHistory: View {
+/// Empty state for a card. The defaults are the History charts' copy; Reports sections
+/// pass their own message naming what they're waiting for.
+struct NotEnoughHistory: View {
+    var title = "Not enough history yet"
+    var message = "Charts fill in as Battery Meter records in the background."
+    var symbol = "chart.xyaxis.line"
+    /// Short form for cards that stack in a scrolling pane (Reports): the same content
+    /// without `ContentUnavailableView`'s large symbol and padding.
+    var compact = false
+
     var body: some View {
-        ContentUnavailableView {
-            Label("Not enough history yet", systemImage: "chart.xyaxis.line")
-        } description: {
-            Text("Charts fill in as Battery Meter records in the background.")
-                .font(.subheadline)
+        if compact {
+            VStack(spacing: 6) {
+                Image(systemName: symbol)
+                    .font(.title2)
+                    .foregroundStyle(.tertiary)
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+                Text(message)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .accessibilityElement(children: .combine)
+        } else {
+            ContentUnavailableView {
+                Label(title, systemImage: symbol)
+            } description: {
+                Text(message)
+                    .font(.subheadline)
+            }
         }
     }
 }
@@ -215,7 +242,7 @@ private struct SessionsChart: View {
     }
 }
 
-private struct HealthChart: View {
+struct HealthChart: View {
     let points: [HealthPoint]
     let domain: ClosedRange<Date>
     @Bindable var hover: ChartHover
@@ -301,7 +328,7 @@ private struct EndLabel: View {
     }
 }
 
-private struct HoverReadout: View {
+struct HoverReadout: View {
     let value: String
     let detail: String
 

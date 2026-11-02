@@ -8,7 +8,6 @@ struct BatteryMeterApp: App {
     private let model: BatteryModel
     private let hover = ChartHover()
     private let settings = SettingsState()
-    /// Not shown yet; the Reports view (Task 7) reads it.
     private let reports: ReportsModel
     private let sampler: EnergySampler
 
@@ -28,7 +27,7 @@ struct BatteryMeterApp: App {
         self.sampler = sampler
         #if DEBUG
         if let dir = SnapshotRenderer.requestedDirectory {
-            Task { await SnapshotRenderer.run(model: model, to: dir) }
+            Task { await SnapshotRenderer.run(model: model, reports: reports, to: dir) }
             return
         }
         #endif
@@ -46,7 +45,7 @@ struct BatteryMeterApp: App {
         .menuBarExtraStyle(.window)
 
         Window("Battery Meter", id: "main") {
-            MainWindow(model: model, hover: hover, settings: settings)
+            MainWindow(model: model, reports: reports, hover: hover, settings: settings)
                 // Menu bar only, except while this window is open.
                 .onAppear {
                     NSApp.setActivationPolicy(.regular)

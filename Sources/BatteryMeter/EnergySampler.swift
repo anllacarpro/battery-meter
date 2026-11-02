@@ -50,7 +50,9 @@ final class EnergySampler {
         guard !rows.isEmpty else { return }
         var impacts: [String: Double] = [:]
         for row in rows {
-            let name = NSRunningApplication(processIdentifier: row.pid)?.localizedName ?? row.command
+            let name = AppEnergyReport.cleanName(
+                NSRunningApplication(processIdentifier: row.pid)?.localizedName ?? row.command)
+            guard !name.isEmpty else { continue }
             impacts[name, default: 0] += row.power * Self.interval
         }
 

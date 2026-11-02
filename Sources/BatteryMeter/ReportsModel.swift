@@ -11,6 +11,8 @@ final class ReportsModel {
     static let powerLogInterval: TimeInterval = 1800
 
     var report: BatteryReport?
+    /// Discharge sessions table: newest 20, or all of them.
+    var showAllSessions = false
 
     @ObservationIgnored private let battery: BatteryModel
     @ObservationIgnored private let energyStore: AppEnergyStore
@@ -67,4 +69,14 @@ final class ReportsModel {
         report = nil
         lastBuild = nil
     }
+
+    #if DEBUG
+    /// Snapshot rendering only: shows `report` as if it had just been built, so the panes'
+    /// `refresh()` is throttled and never replaces it (nor reads any collector).
+    func showSnapshot(_ report: BatteryReport) {
+        generation += 1
+        self.report = report
+        lastBuild = Date()
+    }
+    #endif
 }
