@@ -160,15 +160,23 @@ private struct NotEnoughHistory: View {
 
 private let lineStyle = StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
 
-/// 8 pt series dot with a 2 pt ring in the card color, so it stays legible on the line.
-private struct RingedDot: View {
+/// 8 pt series dot. `ringed` adds a 2 pt ring in the card color so sparse points stay
+/// legible where they cross the line. Dense lines (daily points a few pt apart) go without:
+/// the 12 pt ring would paint over the neighbouring segments and detach the dot.
+private struct SeriesDot: View {
+    var ringed = true
+
     var body: some View {
         Circle()
             .fill(ChartSurface.series)
             .frame(width: 8, height: 8)
-            .padding(2)
+            .padding(ringed ? 2 : 0)
             // The card fill is translucent, so lay it over the window color to get an opaque ring.
-            .background(Circle().fill(ChartSurface.card).background(Circle().fill(ChartSurface.window)))
+            .background {
+                if ringed {
+                    Circle().fill(ChartSurface.card).background(Circle().fill(ChartSurface.window))
+                }
+            }
     }
 }
 
@@ -185,7 +193,7 @@ private struct SessionsChart: View {
                     .lineStyle(lineStyle)
                     .foregroundStyle(ChartSurface.series)
                 PointMark(x: .value("Date", session.start), y: .value("Hours", session.hoursPerFullCharge))
-                    .symbol { RingedDot() }
+                    .symbol { SeriesDot() }
             }
             if let selected {
                 RuleMark(x: .value("Date", selected.start))
@@ -255,10 +263,10 @@ private struct HealthChart: View {
                             detail: selected.day.formatted(.dateTime.month(.abbreviated).day()))
                     }
                 PointMark(x: .value("Day", selected.day), y: .value("Health", selected.percent))
-                    .symbol { RingedDot() }
+                    .symbol { SeriesDot(ringed: false) }
             } else if let last = points.last {
                 PointMark(x: .value("Day", last.day), y: .value("Health", last.percent))
-                    .symbol { RingedDot() }
+                    .symbol { SeriesDot(ringed: false) }
                     .annotation(position: .top, alignment: .trailing, spacing: 6) {
                         EndLabel(text: BatteryFormat.percent(last.percent))
                     }
@@ -272,7 +280,7 @@ private struct HealthChart: View {
                 AxisGridLine()
                 AxisValueLabel {
                     if let percent = value.as(Double.self) {
-                        Text(percent.formatted(.number.precision(.fractionLength(0...1))) + "%")
+                        Text(percent.formatted(.number.precision(.fractionLength(0))) + "%")
                     }
                 }
             }
@@ -281,15 +289,15 @@ private struct HealthChart: View {
         .accessibilityLabel("Battery health by day")
     }
 
-    /// Zoomed to the data (health moves by tenths of a percent), always reaching 100%,
-    /// with both ends on a tick.
+    /// At least 95–100%, so recalibration noise of a few tenths reads as flat rather than
+    /// as a cliff; widens (and coarsens the ticks) only when the data needs it.
     private var yAxis: (domain: ClosedRange<Double>, ticks: [Double]) {
         let values = points.map(\.percent)
-        let lo = (values.min() ?? 99) - 0.25
-        let hi = max(100, values.max() ?? 100)
-        let step = [0.5, 1, 2, 5, 10, 25].first { (hi - lo) / $0 <= 4 } ?? 25
-        let first = (lo / step).rounded(.down) * step
-        let last = (hi / step).rounded(.up) * step
+        let span = (lo: min((values.min() ?? 100).rounded(.down), 95),
+                    hi: max(100, (values.max() ?? 100).rounded(.up)))
+        let step = [1.0, 2, 5, 10, 25].first { (span.hi - span.lo) / $0 <= 5 } ?? 25
+        let first = (span.lo / step).rounded(.down) * step
+        let last = (span.hi / step).rounded(.up) * step
         return (first...last, Array(stride(from: first, through: last + step / 2, by: step)))
     }
 
