@@ -12,7 +12,11 @@ public enum BatteryParser {
             let remaining = int(battery["RemainingCapacity"]),
             let percent = int(raw["CurrentCapacity"]),
             let voltage = int(raw["Voltage"]),
-            let amperage = int(raw["Amperage"])
+            let amperage = int(raw["Amperage"]),
+            let cycles = int(raw["CycleCount"]),
+            let isCharging = bool(raw["IsCharging"]),
+            let external = bool(raw["ExternalConnected"]),
+            let fullyCharged = bool(raw["FullyCharged"])
         else { return nil }
 
         let adapter = raw["AdapterDetails"] as? [String: Any]
@@ -24,13 +28,13 @@ public enum BatteryParser {
             remainingCapacity: remaining,
             fullChargeCapacity: full,
             designCapacity: design,
-            cycleCount: int(raw["CycleCount"]) ?? 0,
+            cycleCount: cycles,
             designCycleCount: int(raw["DesignCycleCount9C"]),
             voltage: voltage,
             amperage: amperage,
-            isCharging: bool(raw["IsCharging"]),
-            externalConnected: bool(raw["ExternalConnected"]),
-            fullyCharged: bool(raw["FullyCharged"]),
+            isCharging: isCharging,
+            externalConnected: external,
+            fullyCharged: fullyCharged,
             adapterWatts: int(adapter?["Watts"]),
             notChargingReason: int(charger?["NotChargingReason"]),
             osMinutesToEmpty: minutes(raw["AvgTimeToEmpty"]),
@@ -43,8 +47,8 @@ public enum BatteryParser {
         (value as? NSNumber).map { Int($0.int64Value) }
     }
 
-    private static func bool(_ value: Any?) -> Bool {
-        (value as? NSNumber)?.boolValue ?? false
+    private static func bool(_ value: Any?) -> Bool? {
+        (value as? NSNumber)?.boolValue
     }
 
     private static func minutes(_ value: Any?) -> Int? {

@@ -4,10 +4,10 @@ import Testing
 
 private func ownerSample() -> [String: Any] {
     [
-        "CurrentCapacity": 63,
+        "CurrentCapacity": 34,
         "CycleCount": 8,
         "DesignCycleCount9C": 1000,
-        "Voltage": 11_890,
+        "Voltage": 11_356,
         "Amperage": NSNumber(value: UInt64(18446744073709551254)),
         "IsCharging": false,
         "ExternalConnected": false,
@@ -16,9 +16,11 @@ private func ownerSample() -> [String: Any] {
         "AvgTimeToFull": 65535,
         "BatteryData": [
             "DesignCapacity": 4629,
-            "FullChargeCapacity": 4500,
-            "RemainingCapacity": 2835,
+            "FullChargeCapacity": 4575,
+            "RemainingCapacity": 1515,
         ] as [String: Any],
+        "ChargerData": ["NotChargingReason": 128] as [String: Any],
+        "AdapterDetails": ["FamilyCode": 0] as [String: Any],
     ]
 }
 
@@ -28,21 +30,31 @@ private func ownerSample() -> [String: Any] {
     @Test func parsesOwnerSample() throws {
         let r = try #require(BatteryParser.parse(ownerSample(), at: date))
         #expect(r.timestamp == date)
-        #expect(r.percent == 63)
+        #expect(r.percent == 34)
         #expect(r.amperage == -362)
         #expect(r.cycleCount == 8)
         #expect(r.designCycleCount == 1000)
         #expect(r.designCapacity == 4629)
-        #expect(r.fullChargeCapacity == 4500)
-        #expect(r.remainingCapacity == 2835)
-        #expect(r.voltage == 11_890)
+        #expect(r.fullChargeCapacity == 4575)
+        #expect(r.remainingCapacity == 1515)
+        #expect(r.voltage == 11_356)
         #expect(r.osMinutesToEmpty == 214)
         #expect(r.osMinutesToFull == nil)
         #expect(r.isCharging == false)
+        #expect(r.notChargingReason == 128)
+        #expect(r.adapterWatts == nil)
     }
 
     @Test func missingAdapterWattsIsNil() throws {
         let r = try #require(BatteryParser.parse(ownerSample(), at: date))
+        #expect(r.adapterWatts == nil)
+    }
+
+    @Test func absentAdapterAndChargerAreNil() throws {
+        var raw = ownerSample()
+        raw["AdapterDetails"] = nil
+        raw["ChargerData"] = nil
+        let r = try #require(BatteryParser.parse(raw, at: date))
         #expect(r.adapterWatts == nil)
         #expect(r.notChargingReason == nil)
     }
@@ -63,7 +75,7 @@ private func ownerSample() -> [String: Any] {
     }
 
     @Test func missingTopLevelKeyReturnsNil() {
-        for key in ["CurrentCapacity", "Voltage", "Amperage"] {
+        for key in ["CurrentCapacity", "Voltage", "Amperage", "CycleCount", "IsCharging", "ExternalConnected", "FullyCharged"] {
             var raw = ownerSample()
             raw[key] = nil
             #expect(BatteryParser.parse(raw, at: date) == nil, "\(key)")
