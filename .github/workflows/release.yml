@@ -59,8 +59,8 @@ jobs:
             echo "Casks/battery-meter.rb missing on main — merge the Homebrew PR before tagging releases." >&2
             exit 1
           }
-          perl -i -pe "s/^  version \".*\"/  version \"$ENV{VERSION}\"/" Casks/battery-meter.rb
-          perl -i -pe "s/^  sha256 \".*\"/  sha256 \"$ENV{SHA256}\"/" Casks/battery-meter.rb
+          perl -i -pe 's/^  version ".*"/  version "$ENV{VERSION}"/' Casks/battery-meter.rb
+          perl -i -pe 's/^  sha256 ".*"/  sha256 "$ENV{SHA256}"/' Casks/battery-meter.rb
           echo "$VERSION" > VERSION
 
       - name: Open PR with cask checksum
