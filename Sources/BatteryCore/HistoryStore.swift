@@ -63,10 +63,19 @@ public final class HistoryStore: @unchecked Sendable {
     public func prune(olderThan: Date) throws {
         try queue.sync {
             guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
-            let encoder = Self.makeEncoder()
+            // A read error propagates here, leaving the file untouched.
+            let data = try Data(contentsOf: fileURL)
+            let decoder = Self.makeDecoder()
+            var lines = data.split(separator: 0x0A, omittingEmptySubsequences: false)
+            // The last element is whatever follows the final newline: empty for a clean
+            // file, otherwise a crash-truncated fragment, which is dropped.
+            _ = lines.popLast()
             var out = Data()
-            for r in readAll() where r.timestamp >= olderThan {
-                out.append(try encoder.encode(r))
+            for line in lines {
+                // Complete lines are kept verbatim unless they decode and are too old.
+                if let r = try? decoder.decode(BatteryReading.self, from: Data(line)),
+                   r.timestamp < olderThan { continue }
+                out.append(contentsOf: line)
                 out.append(0x0A)
             }
             try out.write(to: fileURL, options: .atomic)
@@ -80,10 +89,13 @@ public final class HistoryStore: @unchecked Sendable {
         }
     }
 
-    /// Must be called on `queue`. Undecodable lines (e.g. a truncated tail) are skipped.
+    /// Must be called on `queue`. Undecodable lines (e.g. a truncated tail) are skipped;
+    /// an unreadable file yields no readings.
     private func readAll() -> [BatteryReading] {
         guard let data = try? Data(contentsOf: fileURL) else { return [] }
         let decoder = Self.makeDecoder()
-        return data.split(separator: 0x0A).compactMap { try? decoder.decode(BatteryReading.self, from: Data($0)) }
+        return data.split(separator: 0x0A).compactMap {
+            try? decoder.decode(BatteryReading.self, from: Data($0))
+        }
     }
 }

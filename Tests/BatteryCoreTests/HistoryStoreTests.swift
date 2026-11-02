@@ -72,6 +72,42 @@ import Foundation
         #expect(store.load(since: .distantPast).count == 3)
     }
 
+    @Test func pruneKeepsUndecodableCompleteLines() throws {
+        let (store, url) = makeStore()
+        try store.append(reading(1_000_000))
+        try append(raw: "{\"future\":\"schema\"}\n", to: url)
+        try store.append(reading(1_000_200))
+        try store.prune(olderThan: Date(timeIntervalSince1970: 1_000_100))
+        let text = try String(contentsOf: url, encoding: .utf8)
+        #expect(text.contains("{\"future\":\"schema\"}\n"))
+        #expect(store.load(since: .distantPast).map(\.timestamp.timeIntervalSince1970) == [1_000_200])
+    }
+
+    @Test func pruneDropsTruncatedTail() throws {
+        let (store, url) = makeStore()
+        try store.append(reading(1_000_200))
+        try append(raw: "{\"timest", to: url)
+        try store.prune(olderThan: Date(timeIntervalSince1970: 1_000_100))
+        let text = try String(contentsOf: url, encoding: .utf8)
+        #expect(!text.contains("{\"timest\""))
+        #expect(!text.hasSuffix("timest"))
+        #expect(text.hasSuffix("\n"))
+        #expect(store.load(since: .distantPast).count == 1)
+    }
+
+    @Test func pruneThrowsWhenUnreadable() throws {
+        let (store, url) = makeStore()
+        try store.append(reading(1_000_000))
+        let original = try Data(contentsOf: url)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: url.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path) }
+        #expect(throws: (any Error).self) {
+            try store.prune(olderThan: Date(timeIntervalSince1970: 2_000_000))
+        }
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path)
+        #expect(try Data(contentsOf: url) == original)
+    }
+
     @Test func pruneMissingFileIsNoOp() throws {
         let (store, _) = makeStore()
         try store.prune(olderThan: Date())
