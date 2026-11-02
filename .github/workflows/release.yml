@@ -77,4 +77,3 @@ jobs:
             - [`VERSION`](VERSION) synced to `${{ needs.release.outputs.version }}`.
 
             Merge this PR so `brew install --cask battery-meter` verifies the download.
-          labels: automation, homebrew
