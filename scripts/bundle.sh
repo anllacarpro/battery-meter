@@ -11,7 +11,14 @@ for arg in "$@"; do
     esac
 done
 
-cd "$(dirname "$0")/.."
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+
+VERSION="${BATTERY_METER_VERSION:-$(tr -d '[:space:]' < "$ROOT/VERSION")}"
+if [[ -z "$VERSION" ]]; then
+    echo "VERSION file missing or empty" >&2
+    exit 64
+fi
 
 swift build -c release
 BIN_DIR="$(swift build -c release --show-bin-path)"
@@ -21,7 +28,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/BatteryMeter" "$APP/Contents/MacOS/BatteryMeter"
 
-cat > "$APP/Contents/Info.plist" <<'PLIST'
+cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -39,7 +46,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.1.0</string>
+    <string>${VERSION}</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>LSMinimumSystemVersion</key>
