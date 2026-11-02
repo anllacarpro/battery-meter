@@ -6,9 +6,11 @@ public enum MenuBarFormat: String, CaseIterable, Sendable {
 }
 
 public enum MenuBarText {
-    /// The label text for `state`. Without hours (plugged in, or draw too low to estimate)
-    /// every format shows the hours-format text.
+    /// The label text for `state`. `.percent` always shows the percent. Without hours
+    /// (plugged in, or draw too low to estimate) `.hours` and `.both` show the
+    /// hours-format fallback: "—" on battery, otherwise the percent.
     public static func text(state: PowerState, percent: Int, format: MenuBarFormat) -> String {
+        if format == .percent { return "\(percent)%" }
         let hours: TimeInterval?
         let fallback: String
         switch state {
@@ -24,10 +26,6 @@ public enum MenuBarText {
         }
         guard let hours else { return fallback }
         let hoursText = DurationText.short(hours)
-        switch format {
-        case .hours: return hoursText
-        case .percent: return "\(percent)%"
-        case .both: return "\(hoursText) · \(percent)%"
-        }
+        return format == .both ? "\(hoursText) · \(percent)%" : hoursText
     }
 }
