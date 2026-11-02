@@ -12,7 +12,7 @@ enum SnapshotRenderer {
         return URL(fileURLWithPath: args[i + 1], isDirectory: true)
     }
 
-    static func run(model: BatteryModel, reports: ReportsModel, to dir: URL) async {
+    static func run(model: BatteryModel, reports: ReportsModel, sampler: EnergySampler, to dir: URL) async {
         await model.loadHistory(pruning: false)
         model.refresh(record: false)
         // Synthetic history lives only in this in-memory model; its store points at
@@ -39,6 +39,17 @@ enum SnapshotRenderer {
             logSource: PowerLogSource())
         noLogReports.showSnapshot(SampleReport.make(history: sample.history, sleepLog: false))
 
+        // In-memory battery states with the runtime fields set directly, so these renders
+        // never depend on the real typical-draw compute (which races in snapshot mode).
+        let highUse = SampleBattery.highUse()
+        let estimate = SampleBattery.estimate()
+        let charging = SampleBattery.charging()
+        let highUseSampler = EnergySampler(
+            battery: highUse, store: AppEnergyStore(fileURL: URL(fileURLWithPath: "/dev/null")))
+        highUseSampler.showSnapshot(topApps: ["iPhone Mirroring", "rapportd"], date: .now)
+        let idleSampler = EnergySampler(
+            battery: estimate, store: AppEnergyStore(fileURL: URL(fileURLWithPath: "/dev/null")))
+
         // Reads the login-item status only; never registers or sets didOfferLaunchAtLogin.
         let settings = SettingsState()
         let settingsWithNote = SettingsState()
@@ -47,11 +58,28 @@ enum SnapshotRenderer {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         for scheme in [ColorScheme.light, .dark] {
             let suffix = scheme == .light ? "light" : "dark"
-            write(PopoverView(model: model), scheme: scheme, to: dir.appending(path: "popover-\(suffix).png"))
+            for (name, source, energy) in [
+                ("popover", model, sampler),
+                ("popover-high-use", highUse, highUseSampler),
+                ("popover-estimate", estimate, idleSampler),
+                ("popover-charging", charging, idleSampler),
+            ] {
+                write(PopoverView(model: source, sampler: energy, actions: .inert), scheme: scheme,
+                      to: dir.appending(path: "\(name)-\(suffix).png"))
+            }
+            // Review-only: hosted in a window, so AppKit-backed controls (the footer's
+            // accessory-bar buttons) draw as they do live.
+            await writeWindow(PopoverView(model: highUse, sampler: highUseSampler, actions: .inert),
+                              width: 300, height: 380, scheme: scheme,
+                              to: dir.appending(path: "popover-high-use-hosted-\(suffix).png"))
+            write(MenuBarIconSheet(), scheme: scheme, to: dir.appending(path: "menubar-icons-\(suffix).png"))
             write(EmptyStateView().padding(16).frame(width: 300), scheme: scheme,
                   to: dir.appending(path: "empty-\(suffix).png"))
             for (name, item, source, report, state, height) in [
                 ("overview", SidebarItem.overview, model, reports, settings, 520.0),
+                ("overview-high-use", .overview, highUse, sampleReports, settings, 620),
+                ("overview-estimate", .overview, estimate, sampleReports, settings, 620),
+                ("overview-charging", .overview, charging, sampleReports, settings, 620),
                 ("reports", .reports, model, reports, settings, 520),
                 ("reports-sample", .reports, sample, sampleReports, settings, 520),
                 // Review-only: the whole pane, to check every section.
@@ -64,6 +92,7 @@ enum SnapshotRenderer {
                 ("health", .health, model, reports, settings, 520),
                 ("history-sample", .history, sample, reports, settings, 520),
                 ("settings", .settings, model, reports, settings, 520),
+                ("settings-menubar", .settings, model, reports, settings, 640),
                 ("settings-note", .settings, model, reports, settingsWithNote, 520),
             ] {
                 await writeWindow(
@@ -89,8 +118,10 @@ enum SnapshotRenderer {
 
     /// ImageRenderer can't draw AppKit-backed views (List, Form), so the window is hosted
     /// in a transparent NSWindow and captured with `cacheDisplay`.
-    private static func writeWindow(_ view: some View, height: CGFloat, scheme: ColorScheme, to url: URL) async {
-        let frame = NSRect(x: 0, y: 0, width: 760, height: height)
+    private static func writeWindow(
+        _ view: some View, width: CGFloat = 760, height: CGFloat, scheme: ColorScheme, to url: URL
+    ) async {
+        let frame = NSRect(x: 0, y: 0, width: width, height: height)
         let hosting = NSHostingView(rootView: view)
         hosting.sizingOptions = []
         hosting.frame = frame
@@ -168,6 +199,119 @@ enum SnapshotRenderer {
             if let match = sub as? T ?? firstSubview(type, in: sub) { return match }
         }
         return nil
+    }
+}
+
+/// Review-only: the percentage-inside icon at each level, template and colored, charging
+/// or not. Large (4x) to check the numerals, then at real size on a menu-bar-like strip.
+private struct MenuBarIconSheet: View {
+    private static let levels = [100, 85, 50, 20, 8, 5]
+    private static let rows: [(String, Bool, MenuBarColorRole)] = [
+        ("Template", false, .none), ("Red", false, .low),
+        ("Template, charging", true, .none), ("Green, charging", true, .charging),
+    ]
+
+    @Environment(\.colorScheme) private var scheme
+    private var ink: NSColor { scheme == .dark ? .white : .black }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(Self.rows, id: \.0) { row in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(row.0).font(.caption).foregroundStyle(.secondary)
+                    HStack(spacing: 14) {
+                        ForEach(Self.levels, id: \.self) { level in
+                            Image(nsImage: BatteryIconRenderer.image(percent: level, charging: row.1, role: row.2, ink: ink))
+                                .resizable()
+                                .frame(width: BatteryIconRenderer.size.width * 4, height: BatteryIconRenderer.size.height * 4)
+                        }
+                    }
+                }
+            }
+            Text("Real size").font(.caption).foregroundStyle(.secondary)
+            ForEach(Self.rows, id: \.0) { row in
+                HStack(spacing: 10) {
+                    ForEach(Self.levels, id: \.self) { level in
+                        Image(nsImage: BatteryIconRenderer.image(percent: level, charging: row.1, role: row.2, ink: ink))
+                    }
+                }
+            }
+            Text("Preview strips").font(.caption).foregroundStyle(.secondary)
+            HStack {
+                MenuBarPreview(style: .standard, source: PreviewSource(percent: 75, state: .onBattery(timeLeft: 19_800), watts: 12.4))
+                MenuBarPreview(
+                    style: MenuBarStyle(icon: .percentInside, format: .hours, colors: .lowOnly, lowThreshold: 10, timeStyle: .clock),
+                    source: PreviewSource(percent: 75, state: .onBattery(timeLeft: 19_800), watts: 12.4))
+                MenuBarPreview(
+                    style: MenuBarStyle(icon: .percentInside, format: .watts, colors: .lowAndCharging, lowThreshold: 10, timeStyle: .clock),
+                    source: PreviewSource(percent: 60, state: .charging(timeToFull: 1800), watts: 38.4))
+            }
+        }
+        .padding(16)
+    }
+}
+
+private extension PopoverActions {
+    /// Snapshots never click.
+    static var inert: PopoverActions { PopoverActions(openWindow: {}, openReports: {}, openSettings: {}, quit: {}) }
+}
+
+/// Battery states for the headline renders. Each model's store points at /dev/null and
+/// it is never started, so it reads nothing and writes nothing.
+@MainActor
+private enum SampleBattery {
+    private static let hour: TimeInterval = 3600
+
+    /// 75%, 26.6 W against a typical 6.7 W: the high-use case.
+    static func highUse() -> BatteryModel {
+        let model = make(percent: 75, amperage: -2217, external: false, charging: false)
+        model.state = .onBattery(timeLeft: 5.5 * hour)
+        model.runtime = RuntimeEstimate(
+            headline: 5.5 * hour, atPace: 1.5 * hour, paceWatts: 26.6,
+            typicalWatts: 6.7, isEstimate: false, isHighUse: true)
+        model.typicalWatts = 6.7
+        model.liveWatts = 26.6
+        model.liveVolts = 12.0
+        model.liveAmps = -2.22
+        model.fullCharge = FullChargeEstimate(hours: 8.5, isEstimate: false)
+        return model
+    }
+
+    /// No typical draw yet: the headline is a first guess and "Per full charge" is hidden.
+    static func estimate() -> BatteryModel {
+        let model = make(percent: 75, amperage: -767, external: false, charging: false)
+        model.state = .onBattery(timeLeft: 4.75 * hour)
+        model.runtime = RuntimeEstimate(
+            headline: 4.75 * hour, atPace: 4.25 * hour, paceWatts: 9.2,
+            typicalWatts: nil, isEstimate: true, isHighUse: false)
+        model.liveWatts = 9.2
+        model.liveVolts = 12.0
+        model.liveAmps = -0.77
+        return model
+    }
+
+    static func charging() -> BatteryModel {
+        let model = make(percent: 80, amperage: 3200, external: true, charging: true)
+        model.state = .charging(timeToFull: 70 * 60)
+        model.liveWatts = 38.4
+        model.liveVolts = 12.0
+        model.liveAmps = 3.2
+        model.fullCharge = FullChargeEstimate(hours: 8.5, isEstimate: false)
+        return model
+    }
+
+    /// Health 98.6% of a 4629 mAh design, 8 of 1000 cycles, 12 V.
+    private static func make(percent: Int, amperage: Int, external: Bool, charging: Bool) -> BatteryModel {
+        let model = BatteryModel(
+            store: HistoryStore(fileURL: URL(fileURLWithPath: "/dev/null")),
+            energyStore: AppEnergyStore(fileURL: URL(fileURLWithPath: "/dev/null")))
+        let full = Int((4629 * 0.986).rounded())
+        model.reading = BatteryReading(
+            timestamp: .now, percent: percent, remainingCapacity: full * percent / 100,
+            fullChargeCapacity: full, designCapacity: 4629, cycleCount: 8, designCycleCount: 1000,
+            voltage: 12_000, amperage: amperage, isCharging: charging,
+            externalConnected: external, fullyCharged: false)
+        return model
     }
 }
 

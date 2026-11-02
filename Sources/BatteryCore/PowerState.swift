@@ -15,38 +15,38 @@ public struct PowerEstimator: Sendable {
     /// From here up the charge current tapers, so the current-based estimate runs short.
     private static let taperPercent = 80
 
-    private var drawSmoother = EMASmoother(halfLife: 300)
+    private var recentSmoother = EMASmoother(halfLife: 1800)
     private var chargeSmoother = EMASmoother(halfLife: 300)
     private var wattsSmoother = EMASmoother(halfLife: 30)
     private var voltsSmoother = EMASmoother(halfLife: 30)
     private var ampsSmoother = EMASmoother(halfLife: 30)
     private var lastExternal: Bool?
+    private var lastRemainingWh: Double?
+    private var lastTypicalWatts: Double?
 
     public init() {}
 
-    public mutating func update(with reading: BatteryReading) -> PowerState {
+    public mutating func update(with reading: BatteryReading, typicalWatts: Double? = nil) -> PowerState {
         // Plug/unplug changes the current's meaning; never carry it across.
         if let last = lastExternal, last != reading.externalConnected {
-            drawSmoother.reset()
+            recentSmoother.reset()
             chargeSmoother.reset()
             wattsSmoother.reset()
             voltsSmoother.reset()
             ampsSmoother.reset()
         }
         lastExternal = reading.externalConnected
+        lastRemainingWh = reading.remainingWattHours
+        lastTypicalWatts = typicalWatts
 
         let t = reading.timestamp
-        drawSmoother.add(reading.powerWatts, at: t)
+        recentSmoother.add(reading.powerWatts, at: t)
         wattsSmoother.add(reading.powerWatts, at: t)
         voltsSmoother.add(Double(reading.voltage) / 1000, at: t)
         ampsSmoother.add(Double(reading.amperage) / 1000, at: t)
 
         if !reading.externalConnected {
-            guard let watts = drawSmoother.value, watts >= Self.minDrawWatts else {
-                return .onBattery(timeLeft: nil)
-            }
-            let seconds = reading.remainingWattHours / watts * 3600
-            return .onBattery(timeLeft: min(seconds, Self.maxTimeLeft))
+            return .onBattery(timeLeft: runtime?.headline)
         }
         if reading.isCharging {
             chargeSmoother.add(Double(max(reading.amperage, 0)), at: t)
@@ -70,6 +70,26 @@ public struct PowerEstimator: Sendable {
         return min(seconds, Self.maxTimeLeft)
     }
 
+    /// Time left on battery; nil while on AC or before the first reading.
+    public var runtime: RuntimeEstimate? {
+        guard lastExternal == false, let wh = lastRemainingWh else { return nil }
+        let blended = recentWatts.map { recent in lastTypicalWatts.map { 0.5 * $0 + 0.5 * recent } ?? recent }
+        let pace = liveWatts
+        let isHighUse = pace.flatMap { p in lastTypicalWatts.map { p >= 10 && p >= 2 * $0 } } ?? false
+        return RuntimeEstimate(
+            headline: timeLeft(wattHours: wh, watts: blended),
+            atPace: timeLeft(wattHours: wh, watts: pace),
+            paceWatts: pace, typicalWatts: lastTypicalWatts,
+            isEstimate: lastTypicalWatts == nil, isHighUse: isHighUse)
+    }
+
+    private func timeLeft(wattHours: Double, watts: Double?) -> TimeInterval? {
+        guard let watts, watts >= Self.minDrawWatts else { return nil }
+        return min(wattHours / watts * 3600, Self.maxTimeLeft)
+    }
+
+    /// 30-minute smoothed power magnitude in watts.
+    public var recentWatts: Double? { recentSmoother.value }
     /// Smoothed power magnitude in watts.
     public var liveWatts: Double? { wattsSmoother.value }
     /// Smoothed voltage in volts.

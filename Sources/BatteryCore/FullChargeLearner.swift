@@ -63,8 +63,9 @@ public enum FullChargeLearner {
         return result
     }
 
+    /// Learned sessions win; with none, full capacity over `fallbackWatts` (an estimate).
     public static func estimate(
-        history: [BatteryReading], current: BatteryReading?, liveWatts: Double?
+        history: [BatteryReading], current: BatteryReading?, fallbackWatts: Double?
     ) -> FullChargeEstimate? {
         let recent = sessions(in: history).suffix(maxSessions).reversed()  // newest first
         if !recent.isEmpty {
@@ -77,7 +78,7 @@ public enum FullChargeLearner {
             }
             return FullChargeEstimate(hours: weighted / totalWeight, isEstimate: false)
         }
-        guard let current, let liveWatts, liveWatts > 0, current.fullWattHours > 0 else { return nil }
-        return FullChargeEstimate(hours: current.fullWattHours / liveWatts, isEstimate: true)
+        guard let current, let fallbackWatts, fallbackWatts > 0, current.fullWattHours > 0 else { return nil }
+        return FullChargeEstimate(hours: current.fullWattHours / fallbackWatts, isEstimate: true)
     }
 }

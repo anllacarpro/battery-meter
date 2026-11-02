@@ -37,7 +37,7 @@ enum BatteryTiles {
         case .charging: title = "Charging at"
         case .pluggedIn: return nil
         }
-        return Tile(title: title, value: watts.formatted(.number.precision(.fractionLength(1))) + " W")
+        return Tile(title: title, value: BatteryFormat.watts(watts))
     }
 
     static func voltage(_ volts: Double?) -> Tile? {
@@ -65,13 +65,134 @@ enum BatteryFormat {
             .replacingOccurrences(of: "-", with: "\u{2212}")
     }
 
+    static func watts(_ value: Double) -> String {
+        value.formatted(.number.precision(.fractionLength(1))) + " W"
+    }
+
     /// Caption above the headline figure.
     static func headlineCaption(for state: PowerState) -> String {
         switch state {
-        case .onBattery: "Left right now"
+        case .onBattery(let timeLeft): timeLeft == nil ? "Estimating…" : "Estimated left"
         case .charging: "Charging"
         case .pluggedIn: "Plugged in"
         }
+    }
+}
+
+/// The headline block shared by the popover and the Overview: caption, big figure,
+/// charge bar and, on battery, the at-this-pace row and the high-use line. Charging and
+/// plugged in show only the caption, figure and bar.
+struct RuntimeHeadline: View {
+    let reading: BatteryReading
+    let state: PowerState
+    let runtime: RuntimeEstimate?
+    /// Fresh top apps; the high-use line shows only when non-empty and `isHighUse`.
+    var highUseApps: [String] = []
+
+    var body: some View {
+        let figure = MenuBarText.text(state: state, percent: reading.percent, format: .hours)
+        VStack(alignment: .leading, spacing: 0) {
+            HeadlineFigure(
+                caption: BatteryFormat.headlineCaption(for: state),
+                value: figure,
+                isEstimate: timeLeft != nil && runtime?.isEstimate == true)
+            ChargeBar(reading: reading, state: state)
+                .padding(.top, 8)
+            if isOnBattery, let runtime, let atPace = runtime.atPace, let watts = runtime.paceWatts {
+                // The duration is dropped when it would only repeat the headline.
+                let duration = DurationText.short(atPace)
+                PaceRow(duration: timeLeft != nil && duration == figure ? nil : duration, watts: watts)
+                    .padding(.top, 12)
+                if runtime.isHighUse, !highUseApps.isEmpty {
+                    HighUseLine(apps: highUseApps)
+                        .padding(.top, 4)
+                }
+            }
+        }
+    }
+
+    private var isOnBattery: Bool {
+        if case .onBattery = state { true } else { false }
+    }
+
+    /// The headline's time left on battery; nil off battery or while estimating.
+    private var timeLeft: TimeInterval? {
+        if case .onBattery(let timeLeft) = state { timeLeft } else { nil }
+    }
+}
+
+private struct HeadlineFigure: View {
+    let caption: String
+    let value: String
+    let isEstimate: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Text(caption)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+                if isEstimate {
+                    EstimateTag()
+                }
+            }
+            // Fixed, so the tag appearing or going never shifts the figure below.
+            .frame(height: 16)
+            Text(value)
+                .font(.system(size: 38, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .contentTransition(reduceMotion ? .identity : .numericText())
+                .modifier(ReduceMotionAnimation(value: value))
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// A quiet capsule saying the figure is a first guess.
+private struct EstimateTag: View {
+    var body: some View {
+        Text("estimate")
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 1)
+            .background(.quaternary, in: .capsule)
+    }
+}
+
+private struct PaceRow: View {
+    let duration: String?
+    let watts: Double
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text("At this pace")
+            Spacer(minLength: 8)
+            Text(duration.map { "\($0) · \(BatteryFormat.watts(watts))" } ?? BatteryFormat.watts(watts))
+                .monospacedDigit()
+        }
+        .foregroundStyle(.secondary)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct HighUseLine: View {
+    let apps: [String]
+
+    var body: some View {
+        let names = apps.joined(separator: ", ")
+        Label {
+            Text("High use: \(names)")
+                .lineLimit(1)
+                .truncationMode(.tail)
+        } icon: {
+            Image(systemName: "bolt.fill")
+                .accessibilityHidden(true)
+        }
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+        .help("High use: \(names)")
     }
 }
 
@@ -140,6 +261,16 @@ private struct CapsuleProgressStyle: ProgressViewStyle {
             }
             .clipShape(.capsule)
             .frame(height: 8)
-            .animation(.default, value: fraction)
+            .modifier(ReduceMotionAnimation(value: fraction))
+    }
+}
+
+/// `.default` animation for `value`, or none with Reduce Motion on.
+private struct ReduceMotionAnimation<Value: Equatable>: ViewModifier {
+    let value: Value
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content.animation(reduceMotion ? nil : .default, value: value)
     }
 }

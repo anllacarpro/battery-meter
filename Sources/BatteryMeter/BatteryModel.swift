@@ -7,6 +7,7 @@ final class BatteryModel {
     static let readInterval: TimeInterval = 10
     static let recordInterval: TimeInterval = 60
     static let defaultRetentionDays = 180
+    static let typicalInterval: TimeInterval = 600
 
     var reading: BatteryReading?
     var state: PowerState?
@@ -14,6 +15,10 @@ final class BatteryModel {
     var liveVolts: Double?
     var liveAmps: Double?
     var fullCharge: FullChargeEstimate?
+    /// Time left on battery (headline and at-pace); nil on AC or with no battery.
+    var runtime: RuntimeEstimate?
+    /// Mean on-battery draw over the last week; nil until there are enough readings.
+    var typicalWatts: Double?
     var history: [BatteryReading] = []
     /// False until the first history load lands (or a reset empties it); until then
     /// `history` is just a placeholder and nothing should be built from it.
@@ -29,8 +34,12 @@ final class BatteryModel {
     /// after a retention change, or a shrink. The App wires it to force a report rebuild,
     /// whether or not a pane is showing.
     @ObservationIgnored var onHistoryLoaded: (@MainActor () -> Void)?
+    /// Called at the end of every `refresh`, with or without a reading; the status item
+    /// redraws its label from it.
+    @ObservationIgnored var onRefresh: (@MainActor () -> Void)?
     @ObservationIgnored private var estimator = PowerEstimator()
     @ObservationIgnored private var timer: Timer?
+    @ObservationIgnored private var typicalTimer: Timer?
     /// Held for the app's lifetime so App Nap can't stretch the 10 s timer past the
     /// 300 s gap rule (which would split every session). Idle system sleep is still allowed.
     @ObservationIgnored private var activity: NSObjectProtocol?
@@ -71,7 +80,30 @@ final class BatteryModel {
         timer.tolerance = 1
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
+        let typicalTimer = Timer(timeInterval: Self.typicalInterval, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.updateTypicalWatts() }
+        }
+        typicalTimer.tolerance = 30
+        RunLoop.main.add(typicalTimer, forMode: .common)
+        self.typicalTimer = typicalTimer
         Task { await loadHistory() }
+    }
+
+    /// Recomputes `typicalWatts` from a snapshot of `history`, off the main actor. A result
+    /// computed under an older generation (a reset or retention change since) is dropped.
+    func updateTypicalWatts() {
+        guard isHistoryLoaded else { return }
+        let snapshot = history
+        let gen = generation
+        Task {
+            let watts = await Task.detached(priority: .utility) {
+                TypicalDraw.watts(in: snapshot, now: Date())
+            }.value
+            guard gen == generation else { return }
+            typicalWatts = watts
+            updateFullCharge()
+            refresh(record: false)
+        }
     }
 
     /// Loads the retention window (off the main actor) and, when `pruning`, prunes the
@@ -88,8 +120,9 @@ final class BatteryModel {
             coveredDays = days
             let cutoff = Self.cutoff(days: days)
             history.removeAll { $0.timestamp < cutoff }
-            learned = FullChargeLearner.estimate(history: history, current: nil, liveWatts: nil)
+            learned = FullChargeLearner.estimate(history: history, current: nil, fallbackWatts: nil)
             updateFullCharge()
+            updateTypicalWatts()
             onHistoryLoaded?()
         } else {
             Task { await load(days: days, pruning: false) }
@@ -105,7 +138,7 @@ final class BatteryModel {
             if pruning { try? store.prune(olderThan: cutoff) }
             return (readings: readings,
                     times: Set(readings.map(\.timestamp)),
-                    learned: FullChargeLearner.estimate(history: readings, current: nil, liveWatts: nil))
+                    learned: FullChargeLearner.estimate(history: readings, current: nil, fallbackWatts: nil))
         }.value
         guard gen == generation else { return }
         // A reload can race the recorder: keep in-memory readings the file read missed.
@@ -116,10 +149,11 @@ final class BatteryModel {
         history = loaded.readings + recorded
         learned = recorded.isEmpty
             ? loaded.learned
-            : FullChargeLearner.estimate(history: history, current: nil, liveWatts: nil)
+            : FullChargeLearner.estimate(history: history, current: nil, fallbackWatts: nil)
         coveredDays = days
         isHistoryLoaded = true
         updateFullCharge()
+        updateTypicalWatts()
         onHistoryLoaded?()
     }
 
@@ -132,10 +166,13 @@ final class BatteryModel {
             liveVolts = nil
             liveAmps = nil
             fullCharge = nil
+            runtime = nil
+            onRefresh?()
             return
         }
         self.reading = reading
-        state = estimator.update(with: reading)
+        state = estimator.update(with: reading, typicalWatts: typicalWatts)
+        runtime = estimator.runtime
         liveWatts = estimator.liveWatts
         liveVolts = estimator.liveVolts
         liveAmps = estimator.liveAmps
@@ -149,9 +186,10 @@ final class BatteryModel {
             if let first = history.first, first.timestamp < cutoff {
                 history.removeAll { $0.timestamp < cutoff }
             }
-            learned = FullChargeLearner.estimate(history: history, current: nil, liveWatts: nil)
+            learned = FullChargeLearner.estimate(history: history, current: nil, fallbackWatts: nil)
         }
         updateFullCharge()
+        onRefresh?()
     }
 
     /// Due once a minute. A clock set back (`at` earlier than the last recording) also
@@ -167,18 +205,20 @@ final class BatteryModel {
         try? energyStore.reset()
         history = []
         learned = nil
+        typicalWatts = nil
         // The empty history is now authoritative, even if the initial load never landed.
         coveredDays = retentionDays
         isHistoryLoaded = true
         updateFullCharge()
         onReset?()
+        refresh(record: false)
     }
 
-    /// Learned sessions win; otherwise fall back to full capacity / live draw, which only
-    /// means something while the battery is the power source.
+    /// Learned sessions win; otherwise fall back to full capacity / typical draw, shown
+    /// only while the battery is the power source.
     private func updateFullCharge() {
         let onBattery = reading.map { !$0.externalConnected } ?? false
         fullCharge = learned ?? FullChargeLearner.estimate(
-            history: [], current: reading, liveWatts: onBattery ? liveWatts : nil)
+            history: [], current: reading, fallbackWatts: onBattery ? typicalWatts : nil)
     }
 }

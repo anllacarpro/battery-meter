@@ -10,7 +10,7 @@ struct OverviewView: View {
             if let reading = model.reading, let state = model.state {
                 ScrollView {
                     OverviewContent(
-                        reading: reading, state: state, fullCharge: model.fullCharge,
+                        reading: reading, state: state, runtime: model.runtime, fullCharge: model.fullCharge,
                         liveWatts: model.liveWatts, liveVolts: model.liveVolts, liveAmps: model.liveAmps,
                         reports: reports)
                         .padding(.horizontal, 20)
@@ -28,6 +28,7 @@ struct OverviewView: View {
 private struct OverviewContent: View {
     let reading: BatteryReading
     let state: PowerState
+    let runtime: RuntimeEstimate?
     let fullCharge: FullChargeEstimate?
     let liveWatts: Double?
     let liveVolts: Double?
@@ -37,24 +38,14 @@ private struct OverviewContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             PaneTitle("Overview")
-            HStack(alignment: .top, spacing: 48) {
-                BigFigure(
-                    caption: BatteryFormat.headlineCaption(for: state),
-                    value: MenuBarText.text(state: state, percent: reading.percent, format: .hours))
-                if let fullCharge {
-                    BigFigure(
-                        caption: "Per full charge",
-                        value: DurationText.short(fullCharge.hours * 3600),
-                        note: fullCharge.isEstimate ? "estimate" : nil)
-                }
-            }
-            .padding(.top, 16)
-            ChargeBar(reading: reading, state: state)
-                .padding(.top, 14)
+            // The same headline as the popover, so both read alike.
+            RuntimeHeadline(reading: reading, state: state, runtime: runtime)
+                .padding(.top, 16)
             TileSection(title: "Battery", tiles: [
+                BatteryTiles.fullCharge(fullCharge),
                 BatteryTiles.health(reading),
                 BatteryTiles.cycles(reading),
-            ])
+            ].compactMap { $0 })
             .padding(.top, 24)
             let live = [
                 BatteryTiles.power(state: state, watts: liveWatts),
@@ -69,32 +60,6 @@ private struct OverviewContent: View {
                 .padding(.top, 20)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-private struct BigFigure: View {
-    let caption: String
-    let value: String
-    var note: String? = nil
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(caption)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.secondary)
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(value)
-                    .font(.system(size: 34, weight: .bold, design: .rounded))
-                    .contentTransition(.numericText())
-                    .animation(.default, value: value)
-                if let note {
-                    Text(note)
-                        .font(.subheadline)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-        }
-        .accessibilityElement(children: .combine)
     }
 }
 
