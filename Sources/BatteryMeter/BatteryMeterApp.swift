@@ -8,10 +8,24 @@ struct BatteryMeterApp: App {
     private let model: BatteryModel
     private let hover = ChartHover()
     private let settings = SettingsState()
+    /// Not shown yet; the Reports view (Task 7) reads it.
+    private let reports: ReportsModel
+    private let sampler: EnergySampler
 
     init() {
-        let model = BatteryModel()
+        let energyStore = AppEnergyStore(fileURL: AppEnergyStore.defaultURL)
+        let model = BatteryModel(energyStore: energyStore)
+        let reports = ReportsModel(battery: model, energyStore: energyStore, logSource: PowerLogSource())
+        let sampler = EnergySampler(battery: model, store: energyStore)
+        // Reset clears the history and app-energy files (BatteryModel), then the report
+        // and any in-flight sample.
+        model.onReset = { [weak reports, weak sampler] in
+            reports?.handleReset()
+            sampler?.handleReset()
+        }
         self.model = model
+        self.reports = reports
+        self.sampler = sampler
         #if DEBUG
         if let dir = SnapshotRenderer.requestedDirectory {
             Task { await SnapshotRenderer.run(model: model, to: dir) }
@@ -20,6 +34,7 @@ struct BatteryMeterApp: App {
         #endif
         settings.offerLaunchAtLoginOnce()
         model.start()
+        sampler.start()
     }
 
     var body: some Scene {

@@ -18,6 +18,10 @@ final class BatteryModel {
 
     @ObservationIgnored private let source = IOKitBatterySource()
     @ObservationIgnored private let store: HistoryStore
+    @ObservationIgnored private let energyStore: AppEnergyStore
+    /// Called at the end of `resetLearnedData()`; the App wires it to the report model and
+    /// the energy sampler so neither keeps showing or writing pre-reset data.
+    @ObservationIgnored var onReset: (@MainActor () -> Void)?
     @ObservationIgnored private var estimator = PowerEstimator()
     @ObservationIgnored private var timer: Timer?
     /// Held for the app's lifetime so App Nap can't stretch the 10 s timer past the
@@ -33,8 +37,10 @@ final class BatteryModel {
     /// Estimate learned from discharge sessions in `history`; recomputed only when history changes.
     @ObservationIgnored private var learned: FullChargeEstimate?
 
-    init(store: HistoryStore = HistoryStore(fileURL: HistoryStore.defaultURL)) {
+    init(store: HistoryStore = HistoryStore(fileURL: HistoryStore.defaultURL),
+         energyStore: AppEnergyStore = AppEnergyStore(fileURL: AppEnergyStore.defaultURL)) {
         self.store = store
+        self.energyStore = energyStore
     }
 
     private var retentionDays: Int {
@@ -150,12 +156,14 @@ final class BatteryModel {
     func resetLearnedData() {
         generation += 1
         try? store.reset()
+        try? energyStore.reset()
         history = []
         learned = nil
         // The empty history is now authoritative, even if the initial load never landed.
         coveredDays = retentionDays
         historyLoaded = true
         updateFullCharge()
+        onReset?()
     }
 
     /// Learned sessions win; otherwise fall back to full capacity / live draw, which only
