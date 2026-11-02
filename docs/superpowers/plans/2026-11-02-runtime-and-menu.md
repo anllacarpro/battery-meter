@@ -232,3 +232,60 @@ Design decisions (load `swiftui-expert-skill` first):
 - [ ] **Step 3:** Render the snapshots and review each PNG in light and dark mode. Fix what looks off.
 - [ ] **Step 4:** Check that `history.jsonl` and `app-energy.json` are unchanged by the snapshot run, and that `bash scripts/bundle.sh` builds.
 - [ ] **Step 5:** Commit with the message `feat: clearer popover and overview headline`.
+
+### Task 6: Menu bar personalization
+
+**Files:**
+- Create: `Sources/BatteryCore/MenuBarStyle.swift`, `Sources/BatteryMeter/BatteryIconRenderer.swift`, `Sources/BatteryMeter/MenuBarSettingsSection.swift`
+- Modify: `Sources/BatteryCore/MenuBarText.swift`, `Sources/BatteryCore/MenuBarAppearance.swift`, `Sources/BatteryCore/QuickMenu.swift`, `Sources/BatteryMeter/StatusItemController.swift`, `Sources/BatteryMeter/SettingsView.swift`, `Sources/BatteryMeter/SnapshotRenderer.swift`
+- Test: `Tests/BatteryCoreTests/MenuBarStyleTests.swift`, plus updates to `MenuBarTextTests.swift`, `MenuBarAppearanceTests.swift` and `QuickMenuTests.swift`
+
+**Interfaces:**
+- Consumes: Task 3's `MenuBarText`, `MenuBarFormat`, `MenuBarAppearance`, `QuickMenu`; Task 4's `StatusItemController` and `SettingsState`.
+- Produces:
+```swift
+public enum MenuBarIconStyle: String, CaseIterable, Sendable { case symbol, percentInside, none }
+public enum MenuBarColorMode: String, CaseIterable, Sendable { case monochrome, lowOnly, lowAndCharging }
+public enum MenuBarTimeStyle: String, CaseIterable, Sendable { case hoursMinutes, clock }   // "6h 30m" or "6:30"
+// MenuBarFormat gains two cases: watts, none
+public enum MenuBarColorRole: Sendable { case none, low, charging }
+public struct MenuBarStyle: Equatable, Sendable {
+  public var icon: MenuBarIconStyle
+  public var format: MenuBarFormat
+  public var colors: MenuBarColorMode
+  public var lowThreshold: Int          // 5, 10, 15 or 20
+  public var timeStyle: MenuBarTimeStyle
+  public static let standard: MenuBarStyle   // symbol, hours, lowOnly, 10, hoursMinutes
+  public init(defaults: UserDefaults)         // keys: menuBarIcon, menuBarFormat, menuBarColors, menuBarLowThreshold, menuBarTimeStyle; anything invalid falls back to the standard value
+}
+// MenuBarText.text(state:percent:format:timeStyle:watts:) -> String      (timeStyle defaults to .hoursMinutes, watts to nil)
+// MenuBarAppearance.colorRole(percent:state:style:) -> MenuBarColorRole
+// MenuBarAppearance.isLow(percent:state:threshold:) -> Bool               (threshold defaults to 10)
+```
+
+Rules:
+- `.none` text is the empty string. If the icon is also `.none`, the item falls back to the symbol icon, so it is never empty.
+- `.watts` shows the live draw with one decimal and a space, for example "26.6 W", and "—" when unknown.
+- `.clock` prints hours and minutes as "6:30" and "0:45", rounded to 5 minutes like `DurationText`. It applies to `.hours` and `.both`.
+- `colorRole`: `.low` when on battery, the percent is at or below the threshold and `colors != .monochrome`; `.charging` when charging and `colors == .lowAndCharging`; otherwise `.none`.
+- `QuickMenu` "Menu bar shows" children: Hours left, Percent, Hours and percent, Power draw, Icon only (a checkmark on the current one).
+
+App behavior:
+- `BatteryIconRenderer.image(percent:charging:role:)` draws a battery about 24 × 12 pt: an outline, a terminal nub, a level fill, and the percentage in `NSFont.monospacedDigitSystemFont` inside the body, legible at "100", at "5" and over the fill. A bolt overlay while charging. It is a template image when the role is `.none`, otherwise a colored image (red for `.low`, green for `.charging`).
+- `StatusItemController` builds the button from `MenuBarStyle(defaults:)`: icon by style (`symbol` uses `MenuBarAppearance.symbolName`, `percentInside` uses the renderer, `none` shows no image), and the text from `MenuBarText`. It updates when any of the five keys changes (generalize today's `menuBarFormat` observer).
+- `MenuBarSettingsSection`: a "Menu bar" group in Settings with pickers for Icon (Battery symbol, Battery with percentage inside, No icon), Text, Time style (shown only when the text includes hours), Colors and Low battery at, plus a live preview of the item on a strip. It writes the five keys with `@AppStorage`.
+
+- [ ] **Step 1: Write the failing tests:**
+  - `standardStyleIsToday`: `MenuBarStyle.standard` is symbol, hours, lowOnly, 10, hoursMinutes.
+  - `styleReadsDefaults` and `invalidValuesFallBack`, using a throwaway `UserDefaults(suiteName:)`.
+  - `clockStyle`: 24 000 s gives "6:30" and 2 700 s gives "0:45". With `.both` and `.clock` the text is "6:30 · 34%".
+  - `wattsText`: 26.6 gives "26.6 W" and nil gives "—".
+  - `noneFormatIsEmpty` and `noIconAndNoTextFallsBackToSymbol` (through a pure helper on `MenuBarStyle`, for example `effectiveIcon`).
+  - `colorRoles`: low at the threshold (true), just above (false), monochrome (never), charging with `lowAndCharging` (charging), charging with `lowOnly` (none).
+  - Update `quickMenuOrderAndTitles` and `quickMenuChecksCurrentFormat` for the two new children.
+- [ ] **Step 2:** Run `swift test --filter MenuBarStyleTests` and expect a FAIL.
+- [ ] **Step 3:** Implement the core types, then the renderer, the controller changes and the Settings section.
+- [ ] **Step 4:** Run `swift build` (no Swift warnings) and `swift test`.
+- [ ] **Step 5:** In snapshot mode render `menubar-icons-{light,dark}.png` (the icon at 100, 85, 50, 20, 8 and 5 percent; template and colored; charging) and `window-settings-menubar-{light,dark}.png`. View every PNG and fix legibility, the percentage inside the icon, spacing and contrast. Check that the snapshot run writes nothing.
+- [ ] **Step 6:** Run `bash scripts/bundle.sh` (don't install or open it) and do the 8 s smoke run again, since the status item changed.
+- [ ] **Step 7:** Commit with the message `feat: menu bar personalization`.
