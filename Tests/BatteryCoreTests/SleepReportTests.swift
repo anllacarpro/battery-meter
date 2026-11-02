@@ -124,4 +124,27 @@ import Foundation
         #expect(report.periods[0].darkWakes == 5)
         #expect(report.periods[0].percentLost == 2)
     }
+
+    @Test func sleepSleepWithoutDarkWakeDiscardsOpenPeriod() {
+        // The wake after the first sleep was never logged: only the second sleep's period counts.
+        let events = [event(10, .sleep, charge: 80), event(6, .sleep, charge: 70),
+                      event(2, .wake, charge: 69, reason: .lid)]
+        let report = SleepReport.build(events: events, now: now)
+        #expect(report.periods.count == 1)
+        #expect(report.periods[0].start == now.addingTimeInterval(-6 * 3600))
+        #expect(report.periods[0].percentLost == 1)
+        #expect(report.periods[0].darkWakes == 0)
+    }
+
+    @Test func shutdownBetweenSleepsIsNotOneLongPeriod() {
+        // Sleep at 50%, a shutdown (no wake logged), Sleep at 30% a day later, Wake an hour after.
+        let events = [event(30, .sleep, charge: 50), event(6, .sleep, charge: 30),
+                      event(5, .wake, charge: 28, reason: .lid)]
+        let report = SleepReport.build(events: events, now: now)
+        #expect(report.periods.count == 1)
+        #expect(report.periods[0].start == now.addingTimeInterval(-6 * 3600))
+        #expect(report.periods[0].end == now.addingTimeInterval(-5 * 3600))
+        #expect(report.periods[0].percentLost == 2)
+        #expect(report.percentPerHour == 2)
+    }
 }

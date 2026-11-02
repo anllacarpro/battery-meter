@@ -49,26 +49,32 @@ public struct SleepReport: Equatable, Sendable {
         var open: PowerEvent?        // the sleep that started the current period
         var allOnBattery = true
         var darkWakes = 0
+        var darkWakeSinceSleep = false   // a DarkWake came after the period's latest Sleep
 
         for e in sorted {
             switch e.kind {
             case .sleep:
-                // Sleep -> DarkWake -> Sleep chains are one period: only the first
-                // sleep after a wake opens it, and later sleeps just extend it.
-                if open == nil {
+                // Sleep -> DarkWake -> Sleep chains are one period: a later sleep extends
+                // the open period only after a dark wake. A direct Sleep -> Sleep means a
+                // wake was missed (shutdown, dead battery, an unparsed line), so the open
+                // period can't be trusted: drop it and start again at this sleep.
+                if open != nil, darkWakeSinceSleep {
+                    allOnBattery = allOnBattery && e.onBattery
+                } else {
                     open = e
                     allOnBattery = e.onBattery
                     darkWakes = 0
-                } else {
-                    allOnBattery = allOnBattery && e.onBattery
                 }
+                darkWakeSinceSleep = false
             case .darkWake:
                 guard open != nil else { continue }
                 darkWakes += 1
+                darkWakeSinceSleep = true
                 allOnBattery = allOnBattery && e.onBattery
             case .wake:
                 guard let start = open else { continue }
                 open = nil
+                darkWakeSinceSleep = false
                 allOnBattery = allOnBattery && e.onBattery
                 let duration = e.date.timeIntervalSince(start.date)
                 if allOnBattery, duration >= minimumDuration, e.date >= windowStart {
