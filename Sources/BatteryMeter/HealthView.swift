@@ -12,6 +12,9 @@ struct HealthView: View {
                 Section {
                     row("Design capacity", "\(reading.designCapacity.formatted()) mAh")
                     row("Full charge capacity", "\(reading.fullChargeCapacity.formatted()) mAh")
+                    if let nominal = reading.nominalChargeCapacity {
+                        row("Nominal charge capacity", "\(nominal.formatted()) mAh")
+                    }
                     row("Health", BatteryFormat.percent(reading.healthPercent))
                     row("Cycle count", BatteryFormat.cycles(reading))
                 } header: {

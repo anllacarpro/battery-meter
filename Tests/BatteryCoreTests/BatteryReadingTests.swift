@@ -27,4 +27,25 @@ import Foundation
             externalConnected: false, fullyCharged: false)
         #expect(r.healthPercent == 100)
     }
+
+    private func reading(full: Int, nominal: Int?) -> BatteryReading {
+        BatteryReading(
+            timestamp: Date(timeIntervalSince1970: 0),
+            percent: 50, remainingCapacity: 2000, fullChargeCapacity: full,
+            designCapacity: 4629, cycleCount: 9, designCycleCount: 1000,
+            voltage: 11853, amperage: -662, isCharging: false,
+            externalConnected: false, fullyCharged: false, nominalChargeCapacity: nominal)
+    }
+
+    @Test func healthUsesNominalCapacityWhenPresent() {
+        #expect(abs(reading(full: 4666, nominal: 4400).healthPercent - 95.06) < 0.01)
+    }
+
+    @Test func healthFallsBackToFullChargeWhenNominalMissing() {
+        #expect(abs(reading(full: 4575, nominal: nil).healthPercent - 98.83) < 0.01)
+    }
+
+    @Test func zeroNominalCountsAsMissing() {
+        #expect(abs(reading(full: 4575, nominal: 0).healthPercent - 98.83) < 0.01)
+    }
 }
