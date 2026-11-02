@@ -47,6 +47,19 @@ private func timeLeft(_ state: PowerState) -> TimeInterval? {
         #expect(abs(samples.last! - expected) / expected < 0.02)
     }
 
+    @Test func headlineRecoversAfterLaunchSpike() throws {
+        var est = PowerEstimator()
+        // Drain-free fixture: constant remaining capacity and voltage, ~43 Wh left.
+        // First reading 26.6 W (2 217 mA at 12 V), then a steady 8 W (667 mA).
+        var state = est.update(with: reading(at: 0, mA: -2_217, remaining: 3_600), typicalWatts: 10.3)
+        for i in 1...60 {
+            state = est.update(with: reading(at: TimeInterval(i * 10), mA: -667, remaining: 3_600),
+                               typicalWatts: 10.3)
+        }
+        let hours = try #require(timeLeft(state)) / 3600
+        #expect(hours > 4.2 && hours < 5.2)
+    }
+
     @Test func gapResetsSmoother() {
         var est = PowerEstimator()
         for i in 0..<60 { _ = est.update(with: reading(at: TimeInterval(i * 10), mA: -833)) } // ~10 W
