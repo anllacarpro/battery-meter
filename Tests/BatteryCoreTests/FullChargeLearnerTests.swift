@@ -66,7 +66,7 @@ import Foundation
         let oldSession = Self.run(startOffset: 0, minutes: 72, from: 100, to: 90)
         let newSession = Self.run(startOffset: 3 * 3600, minutes: 96, from: 100, to: 80)
         let history = oldSession + newSession
-        let est = try #require(FullChargeLearner.estimate(history: history, current: nil, liveWatts: nil))
+        let est = try #require(FullChargeLearner.estimate(history: history, current: nil, fallbackWatts: nil))
         #expect(!est.isEstimate)
         // weights: newest 1.0 (8 h), older 0.7 (12 h) -> (8 + 8.4) / 1.7
         #expect(abs(est.hours - (8 + 0.7 * 12) / 1.7) < 1e-9)
@@ -76,14 +76,28 @@ import Foundation
     @Test func coldStartFallback() {
         let current = Self.reading(at: 0, percent: 50, fullCapacity: 5000, voltage: 10_400)
         #expect(abs(current.fullWattHours - 52) < 1e-9)
-        let est = FullChargeLearner.estimate(history: [], current: current, liveWatts: 5.2)
+        let est = FullChargeLearner.estimate(history: [], current: current, fallbackWatts: 5.2)
         #expect(est == FullChargeEstimate(hours: 10, isEstimate: true))
+    }
+
+    @Test func coldStartUsesFallbackWatts() throws {
+        let current = Self.reading(at: 0, percent: 50, fullCapacity: 5000, voltage: 10_400)
+        #expect(abs(current.fullWattHours - 52) < 1e-9)
+        let est = try #require(FullChargeLearner.estimate(history: [], current: current, fallbackWatts: 6.5))
+        #expect(est.isEstimate)
+        #expect(abs(est.hours - 8) < 1e-9)
+    }
+
+    @Test func noFallbackAndNoHistoryIsNil() {
+        let current = Self.reading(at: 0, percent: 50)
+        #expect(FullChargeLearner.estimate(history: [], current: current, fallbackWatts: nil) == nil)
+        #expect(FullChargeLearner.estimate(history: [], current: nil, fallbackWatts: nil) == nil)
     }
 
     @Test func noDataReturnsNil() {
         let current = Self.reading(at: 0, percent: 50)
-        #expect(FullChargeLearner.estimate(history: [], current: nil, liveWatts: 5) == nil)
-        #expect(FullChargeLearner.estimate(history: [], current: current, liveWatts: nil) == nil)
-        #expect(FullChargeLearner.estimate(history: [], current: current, liveWatts: 0) == nil)
+        #expect(FullChargeLearner.estimate(history: [], current: nil, fallbackWatts: 5) == nil)
+        #expect(FullChargeLearner.estimate(history: [], current: current, fallbackWatts: nil) == nil)
+        #expect(FullChargeLearner.estimate(history: [], current: current, fallbackWatts: 0) == nil)
     }
 }
