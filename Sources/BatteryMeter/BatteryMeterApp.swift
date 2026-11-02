@@ -8,18 +8,37 @@ struct BatteryMeterApp: App {
     private let model: BatteryModel
     private let hover = ChartHover()
     private let settings = SettingsState()
+    private let reports: ReportsModel
+    private let sampler: EnergySampler
 
     init() {
-        let model = BatteryModel()
+        let energyStore = AppEnergyStore(fileURL: AppEnergyStore.defaultURL)
+        let model = BatteryModel(energyStore: energyStore)
+        let reports = ReportsModel(battery: model, energyStore: energyStore, logSource: PowerLogSource())
+        let sampler = EnergySampler(battery: model, store: energyStore)
+        // Reset clears the history and app-energy files (BatteryModel), then the report
+        // and any in-flight sample.
+        model.onReset = { [weak reports, weak sampler] in
+            reports?.handleReset()
+            sampler?.handleReset()
+        }
+        // A report built before the history loads would be empty, so `refresh` waits for
+        // it; each new history window (launch load, retention change) forces a rebuild.
+        model.onHistoryLoaded = { [weak reports] in
+            reports?.refresh(force: true)
+        }
         self.model = model
+        self.reports = reports
+        self.sampler = sampler
         #if DEBUG
         if let dir = SnapshotRenderer.requestedDirectory {
-            Task { await SnapshotRenderer.run(model: model, to: dir) }
+            Task { await SnapshotRenderer.run(model: model, reports: reports, to: dir) }
             return
         }
         #endif
         settings.offerLaunchAtLoginOnce()
         model.start()
+        sampler.start()
     }
 
     var body: some Scene {
@@ -31,7 +50,7 @@ struct BatteryMeterApp: App {
         .menuBarExtraStyle(.window)
 
         Window("Battery Meter", id: "main") {
-            MainWindow(model: model, hover: hover, settings: settings)
+            MainWindow(model: model, reports: reports, hover: hover, settings: settings)
                 // Menu bar only, except while this window is open.
                 .onAppear {
                     NSApp.setActivationPolicy(.regular)

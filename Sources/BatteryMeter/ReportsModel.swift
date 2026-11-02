@@ -1,0 +1,87 @@
+import Foundation
+import Observation
+import BatteryCore
+
+/// Builds `BatteryReport` off the main thread from a snapshot of the battery history, the
+/// cached `pmset` log and the stored app energy. Rebuilds at most every 300 s unless
+/// forced; re-reads `pmset` at most every 1800 s.
+@MainActor @Observable
+final class ReportsModel {
+    static let rebuildInterval: TimeInterval = 300
+    static let powerLogInterval: TimeInterval = 1800
+
+    var report: BatteryReport?
+    /// Discharge sessions table: newest 20, or all of them.
+    var showAllSessions = false
+
+    @ObservationIgnored private let battery: BatteryModel
+    @ObservationIgnored private let energyStore: AppEnergyStore
+    @ObservationIgnored private let logSource: PowerLogSource
+    @ObservationIgnored private var lastBuild: Date?
+    @ObservationIgnored private var powerLog: (text: String, fetched: Date)?
+    /// Bumped by every build and by reset; a build that finishes under an older
+    /// generation is stale and discarded, so it never overwrites a newer one.
+    @ObservationIgnored private var generation = 0
+
+    init(battery: BatteryModel, energyStore: AppEnergyStore, logSource: PowerLogSource) {
+        self.battery = battery
+        self.energyStore = energyStore
+        self.logSource = logSource
+    }
+
+    /// Does nothing until the battery history has loaded, so a report is never built from
+    /// the empty placeholder (and then kept by the throttle); "Building reports…" stays up
+    /// instead. `BatteryModel.onHistoryLoaded` forces the first build once it lands.
+    func refresh(force: Bool = false) {
+        guard battery.isHistoryLoaded else { return }
+        let now = Date()
+        // A clock set back (now before the last build) counts as due.
+        if !force, let last = lastBuild, now >= last, now.timeIntervalSince(last) < Self.rebuildInterval {
+            return
+        }
+        lastBuild = now
+        generation += 1
+        let gen = generation
+        let history = battery.history
+        let store = energyStore
+        let logSource = self.logSource
+        let cached = powerLog
+        let logIsFresh = cached.map { now >= $0.fetched && now.timeIntervalSince($0.fetched) < Self.powerLogInterval } ?? false
+
+        Task {
+            var logText = cached?.text
+            if !logIsFresh, let fresh = await logSource.read() {
+                logText = fresh
+                self.powerLog = (fresh, Date())
+            }
+            let text = logText
+            let built = await Task.detached(priority: .utility) {
+                BatteryReport.build(
+                    // No log (pmset failed or timed out, nothing cached) is unknown, not "no sleep".
+                    history: history, powerEvents: text.map(SleepLog.parse),
+                    appEnergy: store.load(), now: now, calendar: .current)
+            }.value
+            guard gen == self.generation else { return }
+            self.report = built
+        }
+    }
+
+    /// Called after "Reset learned data": drops the report and any build in flight, and
+    /// clears the throttle so the next `refresh` rebuilds from the emptied stores. The
+    /// `pmset` cache is system data, not learned data, so it is kept.
+    func handleReset() {
+        generation += 1
+        report = nil
+        lastBuild = nil
+    }
+
+    #if DEBUG
+    /// Snapshot rendering only: shows `report` as if it had just been built, so the panes'
+    /// `refresh()` is throttled and never replaces it (nor reads any collector).
+    func showSnapshot(_ report: BatteryReport) {
+        generation += 1
+        self.report = report
+        lastBuild = Date()
+    }
+    #endif
+}

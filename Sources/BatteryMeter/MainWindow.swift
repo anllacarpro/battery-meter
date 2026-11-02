@@ -2,13 +2,14 @@ import SwiftUI
 import Observation
 
 enum SidebarItem: String, CaseIterable, Identifiable {
-    case overview, history, health, settings
+    case overview, reports, history, health, settings
 
     var id: Self { self }
 
     var title: String {
         switch self {
         case .overview: "Overview"
+        case .reports: "Reports"
         case .history: "History"
         case .health: "Health"
         case .settings: "Settings"
@@ -18,6 +19,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .overview: "gauge.with.dots.needle.33percent"
+        case .reports: "chart.bar.doc.horizontal"
         case .history: "chart.xyaxis.line"
         case .health: "heart.text.square"
         case .settings: "gearshape"
@@ -31,22 +33,25 @@ enum SidebarItem: String, CaseIterable, Identifiable {
 final class ChartHover {
     var sessionDate: Date?
     var healthDate: Date?
+    var usageDay: Date?
 }
 
 /// The window's root: persists the sidebar selection.
 struct MainWindow: View {
     let model: BatteryModel
+    let reports: ReportsModel
     let hover: ChartHover
     let settings: SettingsState
     @AppStorage("sidebarSelection") private var selection: SidebarItem = .overview
 
     var body: some View {
-        MainSplitView(model: model, hover: hover, settings: settings, selection: $selection)
+        MainSplitView(model: model, reports: reports, hover: hover, settings: settings, selection: $selection)
     }
 }
 
 struct MainSplitView: View {
     let model: BatteryModel
+    let reports: ReportsModel
     let hover: ChartHover
     let settings: SettingsState
     @Binding var selection: SidebarItem
@@ -75,7 +80,8 @@ struct MainSplitView: View {
 
     @ViewBuilder private var detail: some View {
         switch selection {
-        case .overview: OverviewView(model: model)
+        case .overview: OverviewView(model: model, reports: reports)
+        case .reports: ReportsView(reports: reports, battery: model, hover: hover)
         case .history: HistoryView(history: model.history, hover: hover)
         case .health: HealthView(reading: model.reading)
         case .settings: SettingsView(model: model, settings: settings)

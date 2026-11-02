@@ -12,13 +12,32 @@ enum SnapshotRenderer {
         return URL(fileURLWithPath: args[i + 1], isDirectory: true)
     }
 
-    static func run(model: BatteryModel, to dir: URL) async {
+    static func run(model: BatteryModel, reports: ReportsModel, to dir: URL) async {
         await model.loadHistory(pruning: false)
         model.refresh(record: false)
         // Synthetic history lives only in this in-memory model; its store points at
         // /dev/null and is never loaded from or written to.
         let sample = BatteryModel(store: HistoryStore(fileURL: URL(fileURLWithPath: "/dev/null")))
         sample.history = SampleHistory.readings()
+
+        // The real report: built from the loaded history, the read-only `pmset -g log` and a
+        // load of the app-energy file (none of which writes). Awaited here so the capture
+        // doesn't race the background build; the panes' own refresh is then throttled.
+        reports.refresh(force: true)
+        for _ in 0..<150 where reports.report == nil {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        // The synthetic report is injected, never built: its collectors are inert and
+        // `showSnapshot` keeps `refresh()` from running them.
+        let sampleReports = ReportsModel(
+            battery: sample, energyStore: AppEnergyStore(fileURL: URL(fileURLWithPath: "/dev/null")),
+            logSource: PowerLogSource())
+        sampleReports.showSnapshot(SampleReport.make(history: sample.history))
+        // Review-only: the same sample with an unreadable sleep log.
+        let noLogReports = ReportsModel(
+            battery: sample, energyStore: AppEnergyStore(fileURL: URL(fileURLWithPath: "/dev/null")),
+            logSource: PowerLogSource())
+        noLogReports.showSnapshot(SampleReport.make(history: sample.history, sleepLog: false))
 
         // Reads the login-item status only; never registers or sets didOfferLaunchAtLogin.
         let settings = SettingsState()
@@ -31,18 +50,26 @@ enum SnapshotRenderer {
             write(PopoverView(model: model), scheme: scheme, to: dir.appending(path: "popover-\(suffix).png"))
             write(EmptyStateView().padding(16).frame(width: 300), scheme: scheme,
                   to: dir.appending(path: "empty-\(suffix).png"))
-            for (name, item, source, state) in [
-                ("overview", SidebarItem.overview, model, settings),
-                ("history", .history, model, settings),
-                ("health", .health, model, settings),
-                ("history-sample", .history, sample, settings),
-                ("settings", .settings, model, settings),
-                ("settings-note", .settings, model, settingsWithNote),
+            for (name, item, source, report, state, height) in [
+                ("overview", SidebarItem.overview, model, reports, settings, 520.0),
+                ("reports", .reports, model, reports, settings, 520),
+                ("reports-sample", .reports, sample, sampleReports, settings, 520),
+                // Review-only: the whole pane, to check every section.
+                ("reports-tall", .reports, model, reports, settings, 1700),
+                ("reports-sample-tall", .reports, sample, sampleReports, settings, 2000),
+                ("reports-sample-nolog-tall", .reports, sample, noLogReports, settings, 2000),
+                ("overview-sample", .overview, model, sampleReports, settings, 620),
+                ("overview-sample-nolog", .overview, model, noLogReports, settings, 620),
+                ("history", .history, model, reports, settings, 520),
+                ("health", .health, model, reports, settings, 520),
+                ("history-sample", .history, sample, reports, settings, 520),
+                ("settings", .settings, model, reports, settings, 520),
+                ("settings-note", .settings, model, reports, settingsWithNote, 520),
             ] {
                 await writeWindow(
-                    MainSplitView(model: source, hover: ChartHover(), settings: state,
+                    MainSplitView(model: source, reports: report, hover: ChartHover(), settings: state,
                                   selection: .constant(item)),
-                    scheme: scheme, to: dir.appending(path: "window-\(name)-\(suffix).png"))
+                    height: height, scheme: scheme, to: dir.appending(path: "window-\(name)-\(suffix).png"))
             }
         }
         exit(0)
@@ -62,8 +89,8 @@ enum SnapshotRenderer {
 
     /// ImageRenderer can't draw AppKit-backed views (List, Form), so the window is hosted
     /// in a transparent NSWindow and captured with `cacheDisplay`.
-    private static func writeWindow(_ view: some View, scheme: ColorScheme, to url: URL) async {
-        let frame = NSRect(x: 0, y: 0, width: 760, height: 520)
+    private static func writeWindow(_ view: some View, height: CGFloat, scheme: ColorScheme, to url: URL) async {
+        let frame = NSRect(x: 0, y: 0, width: 760, height: height)
         let hosting = NSHostingView(rootView: view)
         hosting.sizingOptions = []
         hosting.frame = frame
@@ -186,6 +213,65 @@ private enum SampleHistory {
             }
         }
         return result
+    }
+}
+
+/// A rich in-memory report: a week of usage, 12 sessions, charging stats, a few sleep
+/// periods and 8 apps. The health trend is built from the sample history so the sentence
+/// matches the chart drawn from that same history.
+private enum SampleReport {
+    static func make(history: [BatteryReading], sleepLog: Bool = true) -> BatteryReport {
+        let cal = Calendar.current
+        let now = Date()
+        let today = cal.startOfDay(for: now)
+        let hour: TimeInterval = 3600
+
+        let dayHours = [3.2, 5.1, 0, 4.4, 6.3, 2.4, 1.6]
+        let days = dayHours.enumerated().map { i, h in
+            UsagePeriod(start: cal.date(byAdding: .day, value: i - 6, to: today)!,
+                        batteryTime: h * hour, percentUsed: Int(h * 9.5),
+                        averageWatts: h > 0 ? 6.2 + Double(i % 3) * 0.7 : nil)
+        }
+        let thisWeek = cal.dateInterval(of: .weekOfYear, for: now)!.start
+        let weekHours = [18.5, 22.0, 15.75, 9.5]
+        let weeks = weekHours.enumerated().map { i, h in
+            UsagePeriod(start: cal.date(byAdding: .weekOfYear, value: i - 3, to: thisWeek)!,
+                        batteryTime: h * hour, percentUsed: Int(h * 9.1), averageWatts: 6.4 + Double(i) * 0.3)
+        }
+
+        let sessions = (0..<12).map { i in
+            let start = today.addingTimeInterval(-Double(i) * 1.6 * 86_400 + (9 + Double(i % 4) * 2.5) * hour)
+            let drop = [42, 28, 61, 17, 35, 54, 22, 47, 31, 66, 19, 38][i]
+            let perFull = 10.6 + [0.4, -0.3, 0.2, -0.6, 0.5, -0.1, 0.3, -0.4, 0.1, -0.2, 0.6, -0.5][i]
+            return DischargeSession(start: start, end: start.addingTimeInterval(perFull * Double(drop) / 100 * hour),
+                                    percentDrop: drop, hoursPerFullCharge: perFull)
+        }
+
+        let charging = ChargingReport(
+            chargeCount: 11, typicalPlugInPercent: 34, typicalUnplugPercent: 96,
+            averageDailyTimeAtFull: 2.6 * hour, timeAtFullDays: 7, cyclesPerWeek: 2.8, usualChargerWatts: 70)
+
+        let periods = [(1, 23.2, 8.1, 3, 2), (2, 22.5, 7.4, 2, 1), (3, 13.0, 2.2, 1, 0),
+                       (4, 23.8, 9.0, 4, 3), (5, 0.4, 7.9, 3, 1)].map { d, from, length, lost, dark in
+            let start = cal.date(byAdding: .day, value: -d, to: today)!.addingTimeInterval(from * hour)
+            return SleepPeriod(start: start, end: start.addingTimeInterval(length * hour),
+                               percentLost: lost, darkWakes: dark)
+        }
+        let sleep = SleepReport(
+            periods: periods, percentPerHour: 13.0 / 34.6,
+            wakeReasons: [WakeReasonCount(reason: .lid, count: 9), WakeReasonCount(reason: .userInput, count: 4),
+                          WakeReasonCount(reason: .network, count: 3), WakeReasonCount(reason: .scheduled, count: 2),
+                          WakeReasonCount(reason: .powerButton, count: 1)])
+
+        let apps = [("Safari", 0.31), ("Xcode Previews Helper with a long name", 0.18), ("WhatsApp", 0.14),
+                    ("Mail", 0.11), ("Music", 0.09), ("Finder", 0.07), ("Messages", 0.06), ("Terminal", 0.004)]
+            .map { AppShare(name: $0.0, share: $0.1) }
+
+        let points = DailyHealth.points(in: history)
+        return BatteryReport(
+            generated: now, usage: UsageReport(days: days, weeks: weeks), sessions: sessions,
+            charging: charging, health: HealthTrend.build(points: points), healthPoints: points,
+            sleep: sleepLog ? sleep : nil, apps: apps)
     }
 }
 #endif

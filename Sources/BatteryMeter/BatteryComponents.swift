@@ -78,13 +78,14 @@ enum BatteryFormat {
 struct TileGrid: View {
     let tiles: [Tile]
     var columns = 2
+    var fill = AnyShapeStyle(.regularMaterial)
 
     var body: some View {
         Grid(horizontalSpacing: 8, verticalSpacing: 8) {
             ForEach(rows, id: \.first?.id) { row in
                 GridRow {
                     ForEach(row) { tile in
-                        StatTile(title: tile.title, value: tile.value, caption: tile.caption)
+                        StatTile(title: tile.title, value: tile.value, caption: tile.caption, fill: fill)
                     }
                     ForEach(row.count..<columns, id: \.self) { _ in
                         Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
