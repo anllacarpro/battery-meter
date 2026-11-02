@@ -73,6 +73,14 @@ final class EnergySampler {
         return topApps
     }
 
+    #if DEBUG
+    /// Snapshot rendering only: shows `topApps` as if sampled at `date`. Never samples or writes.
+    func showSnapshot(topApps: [String], date: Date) {
+        self.topApps = topApps
+        topAppsDate = date
+    }
+    #endif
+
     /// One tick: skipped unless on battery (and while a previous tick is still running).
     func sampleNow() async {
         guard !sampling, battery.reading?.externalConnected == false else { return }
