@@ -102,6 +102,7 @@ final class BatteryModel {
             guard gen == generation else { return }
             typicalWatts = watts
             updateFullCharge()
+            refresh(record: false)
         }
     }
 
@@ -210,6 +211,7 @@ final class BatteryModel {
         isHistoryLoaded = true
         updateFullCharge()
         onReset?()
+        refresh(record: false)
     }
 
     /// Learned sessions win; otherwise fall back to full capacity / typical draw, shown
