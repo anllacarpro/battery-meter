@@ -49,7 +49,7 @@
 ```swift
 public enum TypicalDraw {
   public static let minReadings = 30
-  public static func watts(in history: [BatteryReading], now: Date) -> Double?  // median powerWatts, on battery, last 7 days; nil under minReadings
+  public static func watts(in history: [BatteryReading], now: Date) -> Double?  // mean powerWatts, on battery, last 7 days; nil under minReadings
 }
 public struct RuntimeEstimate: Equatable, Sendable {
   public var headline: TimeInterval?    // time left at the blended draw
@@ -72,7 +72,7 @@ Rules:
 - `atPace` uses the existing 30 s smoother (`liveWatts`). It's nil below 0.5 W.
 
 - [ ] **Step 1: Write the failing tests:**
-  - `typicalIsMedianOfBatteryReadings`: 31 on-battery readings, 30 at 5 W and one at 40 W, give 5 (±0.01). AC readings and readings older than 7 days are ignored.
+  - `typicalIsMeanOfBatteryReadings`: 31 on-battery readings, 30 at 5 W and one at 40 W, give about 6.13 (±0.01). AC readings and readings older than 7 days are ignored.
   - `typicalNeedsThirtyReadings`: 29 readings give nil, 30 give a value.
   - `headlineBlendsTypicalAndRecent`: remaining 40 Wh, typical 6 W, recent 14 W gives headline = 40 ÷ 10 W = 4 h (±1%).
   - `spikeAtLaunchDoesNotDominateHeadline`: typical 6.7 W, first reading at 26.6 W, remaining 43 Wh gives a headline over 2.5 h while `atPace` is under 1.7 h.
@@ -278,7 +278,7 @@ App behavior:
 - [ ] **Step 1: Write the failing tests:**
   - `standardStyleIsToday`: `MenuBarStyle.standard` is symbol, hours, lowOnly, 10, hoursMinutes.
   - `styleReadsDefaults` and `invalidValuesFallBack`, using a throwaway `UserDefaults(suiteName:)`.
-  - `clockStyle`: 24 000 s gives "6:30" and 2 700 s gives "0:45". With `.both` and `.clock` the text is "6:30 · 34%".
+  - `clockStyle`: 23 400 s gives "6:30" and 2 700 s gives "0:45". With `.both` and `.clock` the text is "6:30 · 34%".
   - `wattsText`: 26.6 gives "26.6 W" and nil gives "—".
   - `noneFormatIsEmpty` and `noIconAndNoTextFallsBackToSymbol` (through a pure helper on `MenuBarStyle`, for example `effectiveIcon`).
   - `colorRoles`: low at the threshold (true), just above (false), monochrome (never), charging with `lowAndCharging` (charging), charging with `lowOnly` (none).

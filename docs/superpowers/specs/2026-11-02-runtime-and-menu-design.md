@@ -43,6 +43,8 @@ The owner saw "Left right now 1h 30m" on an Air that normally lasts much longer.
 ## Decisions made by the assistant (not confirmed by the owner)
 
 - **Typical draw:** the mean `powerWatts` of on-battery readings in the last 7 days, shown only with at least 30 such readings (about 30 minutes). **Changed from the median on 2026-11-02, after the Task 5 review:** runtime follows the mean draw, because spikes are real energy use. On the owner's data the median predicted 8.5 h per full charge, the observed drain implied about 6.1 h, the learned sessions said 4h 55m, and the mean gave 5.4 h. Without it, the headline uses the 30-minute average and is labeled "estimate".
+- **Cap:** the headline, "At this pace" and the VoiceOver label are capped at 99 h.
+- **Warm-up smoothers (2026-11-02, final review):** every smoother is a warm-up mean (bias-corrected, weighted by the seconds each sample covers). It is the plain mean of the samples so far until the window fills, then equals the usual EMA, so a launch or wake spike cannot keep half its weight for 30 minutes.
 - **Blend:** headline draw = 0.5 × typical + 0.5 × the 30-minute average (EMA, half-life 1800 s).
 - **High use:** pace ≥ 10 W, typical known, and pace ≥ 2 × typical.
 - **Top apps now:** `EnergySampler` takes its first sample 20 s after launch (then every 300 s) and keeps the names of the top 2 apps of the latest sample, shown only while that sample is under 10 minutes old.
