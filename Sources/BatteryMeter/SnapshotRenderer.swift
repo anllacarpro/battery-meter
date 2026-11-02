@@ -20,20 +20,28 @@ enum SnapshotRenderer {
         let sample = BatteryModel(store: HistoryStore(fileURL: URL(fileURLWithPath: "/dev/null")))
         sample.history = SampleHistory.readings()
 
+        // Reads the login-item status only; never registers or sets didOfferLaunchAtLogin.
+        let settings = SettingsState()
+        let settingsWithNote = SettingsState()
+        settingsWithNote.showSampleError("The operation couldn't be completed. Operation not permitted")
+
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         for scheme in [ColorScheme.light, .dark] {
             let suffix = scheme == .light ? "light" : "dark"
             write(PopoverView(model: model), scheme: scheme, to: dir.appending(path: "popover-\(suffix).png"))
             write(EmptyStateView().padding(16).frame(width: 300), scheme: scheme,
                   to: dir.appending(path: "empty-\(suffix).png"))
-            for (name, item, source) in [
-                ("overview", SidebarItem.overview, model),
-                ("history", .history, model),
-                ("health", .health, model),
-                ("history-sample", .history, sample),
+            for (name, item, source, state) in [
+                ("overview", SidebarItem.overview, model, settings),
+                ("history", .history, model, settings),
+                ("health", .health, model, settings),
+                ("history-sample", .history, sample, settings),
+                ("settings", .settings, model, settings),
+                ("settings-note", .settings, model, settingsWithNote),
             ] {
                 await writeWindow(
-                    MainSplitView(model: source, hover: ChartHover(), selection: .constant(item)),
+                    MainSplitView(model: source, hover: ChartHover(), settings: state,
+                                  selection: .constant(item)),
                     scheme: scheme, to: dir.appending(path: "window-\(name)-\(suffix).png"))
             }
         }

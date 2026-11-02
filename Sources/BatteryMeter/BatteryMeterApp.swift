@@ -7,6 +7,7 @@ struct BatteryMeterApp: App {
     // for the whole process, which makes plain stored references equivalent.
     private let model: BatteryModel
     private let hover = ChartHover()
+    private let settings = SettingsState()
 
     init() {
         let model = BatteryModel()
@@ -17,6 +18,7 @@ struct BatteryMeterApp: App {
             return
         }
         #endif
+        settings.offerLaunchAtLoginOnce()
         model.start()
     }
 
@@ -29,7 +31,7 @@ struct BatteryMeterApp: App {
         .menuBarExtraStyle(.window)
 
         Window("Battery Meter", id: "main") {
-            MainWindow(model: model, hover: hover)
+            MainWindow(model: model, hover: hover, settings: settings)
                 // Menu bar only, except while this window is open.
                 .onAppear {
                     NSApp.setActivationPolicy(.regular)

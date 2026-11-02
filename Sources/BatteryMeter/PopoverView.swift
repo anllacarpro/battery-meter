@@ -67,7 +67,7 @@ private struct Header: View {
 
     private var caption: String { BatteryFormat.headlineCaption(for: state) }
 
-    private var bigText: String { MenuBarLabel.text(for: reading, state: state) }
+    private var bigText: String { MenuBarText.text(state: state, percent: reading.percent, format: .hours) }
 }
 
 private struct Footer: View {

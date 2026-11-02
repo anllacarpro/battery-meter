@@ -21,6 +21,11 @@ final class BatteryModel {
     @ObservationIgnored private var estimator = PowerEstimator()
     @ObservationIgnored private var timer: Timer?
     @ObservationIgnored private var historyLoaded = false
+    /// Days of history `history` currently covers (0 until the first load lands).
+    @ObservationIgnored private var coveredDays = 0
+    /// Bumped by reset and retention changes; a load that finishes under an older
+    /// generation is stale and discarded, so it can never overwrite a reset.
+    @ObservationIgnored private var generation = 0
     @ObservationIgnored private var lastRecorded: Date?
     /// Estimate learned from discharge sessions in `history`; recomputed only when history changes.
     @ObservationIgnored private var learned: FullChargeEstimate?
@@ -34,8 +39,10 @@ final class BatteryModel {
         return days > 0 ? days : Self.defaultRetentionDays
     }
 
-    private var retentionCutoff: Date {
-        Date().addingTimeInterval(-TimeInterval(retentionDays) * 86_400)
+    private var retentionCutoff: Date { Self.cutoff(days: retentionDays) }
+
+    private static func cutoff(days: Int) -> Date {
+        Date().addingTimeInterval(-TimeInterval(days) * 86_400)
     }
 
     func start() {
@@ -50,18 +57,45 @@ final class BatteryModel {
         Task { await loadHistory() }
     }
 
-    /// Loads the retention window once (off the main actor) and, when `pruning`, prunes
-    /// the file once. Snapshot rendering passes `false` so the file is never rewritten.
+    /// Loads the retention window (off the main actor) and, when `pruning`, prunes the
+    /// file once. Snapshot rendering passes `false` so the file is never rewritten.
     func loadHistory(pruning: Bool = true) async {
+        await load(days: retentionDays, pruning: pruning)
+    }
+
+    /// Applies a new history window without a restart. Shrinking trims memory only (the
+    /// file is pruned at the next launch); growing reloads the wider window from disk.
+    func applyRetention(days: Int) {
+        generation += 1
+        if historyLoaded, days <= coveredDays {
+            coveredDays = days
+            let cutoff = Self.cutoff(days: days)
+            history.removeAll { $0.timestamp < cutoff }
+            learned = FullChargeLearner.estimate(history: history, current: nil, liveWatts: nil)
+            updateFullCharge()
+        } else {
+            Task { await load(days: days, pruning: false) }
+        }
+    }
+
+    private func load(days: Int, pruning: Bool) async {
         let store = self.store
-        let cutoff = retentionCutoff
+        let cutoff = Self.cutoff(days: days)
+        let gen = generation
         let loaded = await Task.detached(priority: .utility) {
             let readings = store.load(since: cutoff)
             if pruning { try? store.prune(olderThan: cutoff) }
             return (readings, FullChargeLearner.estimate(history: readings, current: nil, liveWatts: nil))
         }.value
-        history = loaded.0
-        learned = loaded.1
+        guard gen == generation else { return }
+        // A reload can race the recorder: keep readings appended after the file was read.
+        let lastLoaded = loaded.0.last?.timestamp ?? .distantPast
+        let recorded = history.filter { $0.timestamp > lastLoaded }
+        history = loaded.0 + recorded
+        learned = recorded.isEmpty
+            ? loaded.1
+            : FullChargeLearner.estimate(history: history, current: nil, liveWatts: nil)
+        coveredDays = days
         historyLoaded = true
         updateFullCharge()
     }
@@ -99,9 +133,13 @@ final class BatteryModel {
     }
 
     func resetLearnedData() {
+        generation += 1
         try? store.reset()
         history = []
         learned = nil
+        // The empty history is now authoritative, even if the initial load never landed.
+        coveredDays = retentionDays
+        historyLoaded = true
         updateFullCharge()
     }
 

@@ -37,16 +37,18 @@ final class ChartHover {
 struct MainWindow: View {
     let model: BatteryModel
     let hover: ChartHover
+    let settings: SettingsState
     @AppStorage("sidebarSelection") private var selection: SidebarItem = .overview
 
     var body: some View {
-        MainSplitView(model: model, hover: hover, selection: $selection)
+        MainSplitView(model: model, hover: hover, settings: settings, selection: $selection)
     }
 }
 
 struct MainSplitView: View {
     let model: BatteryModel
     let hover: ChartHover
+    let settings: SettingsState
     @Binding var selection: SidebarItem
 
     var body: some View {
@@ -76,7 +78,7 @@ struct MainSplitView: View {
         case .overview: OverviewView(model: model)
         case .history: HistoryView(history: model.history, hover: hover)
         case .health: HealthView(reading: model.reading)
-        case .settings: ContentUnavailableView("Settings", systemImage: "gearshape")
+        case .settings: SettingsView(model: model, settings: settings)
         }
     }
 }

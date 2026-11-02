@@ -34,7 +34,7 @@ private struct OverviewContent: View {
             HStack(alignment: .top, spacing: 48) {
                 BigFigure(
                     caption: BatteryFormat.headlineCaption(for: state),
-                    value: MenuBarLabel.text(for: reading, state: state))
+                    value: MenuBarText.text(state: state, percent: reading.percent, format: .hours))
                 if let fullCharge {
                     BigFigure(
                         caption: "Per full charge",
