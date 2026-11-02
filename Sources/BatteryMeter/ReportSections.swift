@@ -282,14 +282,11 @@ struct HealthTrendSection: View {
 
     var body: some View {
         ChartCard(title: "Health trend", subtitle: "Projected from daily full charge capacity vs. design") {
-            switch trend {
-            case .notEnoughData(let days):
+            if let sentence = HealthTrendCopy.sentence(for: trend, calendar: .current) {
+                content(sentence)
+            } else if case .notEnoughData(let days) = trend {
                 emptyState("Health trend needs two weeks of history (\(days == 1 ? "1 day" : "\(days) days") so far).",
                            symbol: "heart.text.square")
-            case .steady(let current):
-                content("Health is steady at \(BatteryFormat.percent(current)).")
-            case .declining(_, let loss, let reaches80):
-                content(declining(loss: loss, reaches80: reaches80))
             }
         }
     }
@@ -306,14 +303,6 @@ struct HealthTrendSection: View {
                     .frame(height: 140)
             }
         }
-    }
-
-    private func declining(loss: Double, reaches80: Date?) -> String {
-        // One decimal; a real but tiny slope would otherwise read "Losing 0.0%".
-        let rate = loss < 0.05 ? "under 0.1%" : loss.formatted(.number.precision(.fractionLength(1))) + "%"
-        let projection = reaches80.map { "Reaches 80% around \($0.formatted(.dateTime.month(.wide).year()))." }
-            ?? "Won't reach 80% in the next 10 years."
-        return "Losing \(rate) a month. \(projection)"
     }
 }
 
