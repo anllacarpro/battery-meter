@@ -5,7 +5,10 @@ import BatteryCore
 /// The menu bar item: a left click toggles the popover, a right click (or Control-click)
 /// opens the quick menu. Lives as long as the app.
 @MainActor
-final class StatusItemController: NSObject, NSMenuDelegate {
+final class StatusItemController: NSObject, NSMenuDelegate, NSPopoverDelegate {
+    /// A transient popover closes on mouse-down on the button (it counts as outside), so
+    /// the same click's mouse-up must not reopen it.
+    private static let reopenGuard: TimeInterval = 0.25
     private let model: BatteryModel
     private let settings: SettingsState
     private let window: MainWindowController
@@ -13,6 +16,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private let popover = NSPopover()
     private var defaultsObserver: NSObjectProtocol?
     private var shownFormat: MenuBarFormat?
+    /// Monotonic time of the last popover close.
+    private var lastPopoverClose: TimeInterval = 0
 
     init(model: BatteryModel, sampler: EnergySampler, settings: SettingsState, window: MainWindowController) {
         self.model = model
@@ -22,6 +27,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
 
         popover.behavior = .transient
         popover.animates = true
+        popover.delegate = self
         let actions = PopoverActions(
             openWindow: { [weak self] in self?.showWindow(pane: nil) },
             openReports: { [weak self] in self?.showWindow(pane: .reports) },
@@ -98,17 +104,32 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     private func togglePopover() {
         if popover.isShown {
             popover.performClose(nil)
+        } else if ProcessInfo.processInfo.systemUptime - lastPopoverClose < Self.reopenGuard {
+            return  // this click already closed it
         } else if let button = statusItem.button {
             // A transient popover only closes on an outside click while the app is active
             // and its window is key. Activating an accessory app adds no Dock icon.
             NSApp.activate()
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
+            button.highlight(true)
         }
     }
 
+    /// Closes at once (before the menu or the window opens) and un-highlights directly,
+    /// not relying on `close()` reaching the delegate.
+    private func closePopover() {
+        if popover.isShown { popover.close() }
+        statusItem.button?.highlight(false)
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        lastPopoverClose = ProcessInfo.processInfo.systemUptime
+        statusItem.button?.highlight(false)
+    }
+
     private func showMenu() {
-        popover.close()
+        closePopover()
         settings.refreshLaunchAtLogin()  // it can change in System Settings
         let menu = NSMenu()
         menu.delegate = self
@@ -118,6 +139,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         // Set only while it's open: with a menu attached, every click would open it.
         statusItem.menu = menu
         statusItem.button?.performClick(nil)
+        // performClick returns once tracking ends; the chosen item's action still runs
+        // (it's dispatched through representedObject). menuDidClose clears it too.
+        statusItem.menu = nil
     }
 
     func menuDidClose(_ menu: NSMenu) {
@@ -161,7 +185,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     }
 
     private func showWindow(pane: SidebarItem?) {
-        popover.close()
+        closePopover()
         window.show(pane: pane)
     }
 }
