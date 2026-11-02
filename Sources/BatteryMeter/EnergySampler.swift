@@ -65,6 +65,13 @@ final class EnergySampler {
         await Task.detached(priority: .utility) {
             try? store.add(impacts, on: day, now: now)
         }.value
+        // A reset that landed during the write ran before (or alongside) it, so the sample
+        // may have reached the emptied file: clear it again, still off the main thread.
+        if gen != generation {
+            await Task.detached(priority: .utility) {
+                try? store.reset()
+            }.value
+        }
     }
 
     /// Two `top` samples one second apart, sorted by power; only the second has deltas.
