@@ -18,7 +18,7 @@ private func reading(
 private func headline(_ est: PowerEstimator) -> TimeInterval? { est.runtime?.headline }
 
 @Suite struct TypicalDrawTests {
-    @Test func typicalIsMedianOfBatteryReadings() throws {
+    @Test func typicalIsMeanOfBatteryReadings() throws {
         var history: [BatteryReading] = (0..<30).map {
             reading(at: now.addingTimeInterval(-TimeInterval($0 * 60)), watts: 5)
         }
@@ -31,7 +31,7 @@ private func headline(_ est: PowerEstimator) -> TimeInterval? { est.runtime?.hea
             reading(at: now.addingTimeInterval(-8 * 86_400 - TimeInterval($0 * 60)), watts: 60)
         }
         let typical = try #require(TypicalDraw.watts(in: history, now: now))
-        #expect(abs(typical - 5) < 0.01)
+        #expect(abs(typical - 190.0 / 31) < 0.01)  // (30 x 5 + 40) / 31
     }
 
     @Test func typicalNeedsThirtyReadings() {
@@ -96,12 +96,12 @@ private func headline(_ est: PowerEstimator) -> TimeInterval? { est.runtime?.hea
         #expect(abs(est.recentWatts! - 5) < 1e-9)
     }
 
-    @Test func evenCountMedianAveragesMiddlePair() throws {
-        let history = (0..<32).map {
-            reading(at: now.addingTimeInterval(-TimeInterval($0 * 60)), watts: 5 + Double($0 % 4))
-        }  // eight each of 5, 6, 7, 8 W
+    @Test func skewedDrawMeanIsAboveMedian() throws {
+        let history = (0..<30).map {
+            reading(at: now.addingTimeInterval(-TimeInterval($0 * 60)), watts: $0 < 20 ? 5 : 20)
+        }  // twenty at 5 W, ten at 20 W: median 5 W, mean 10 W
         let typical = try #require(TypicalDraw.watts(in: history, now: now))
-        #expect(abs(typical - 6.5) < 0.01)
+        #expect(abs(typical - 10) < 0.01)
     }
 
     @Test func futureReadingsAreExcluded() throws {
@@ -123,7 +123,7 @@ private func headline(_ est: PowerEstimator) -> TimeInterval? { est.runtime?.hea
             }
         }
         let inside = try #require(TypicalDraw.watts(in: base + extras(ageHours: 6 * 24 + 23), now: now))
-        #expect(abs(inside - 50) < 0.01)
+        #expect(abs(inside - 2150.0 / 70) < 0.01)  // (30 x 5 + 40 x 50) / 70
         let outside = try #require(TypicalDraw.watts(in: base + extras(ageHours: 7 * 24 + 1), now: now))
         #expect(abs(outside - 5) < 0.01)
     }

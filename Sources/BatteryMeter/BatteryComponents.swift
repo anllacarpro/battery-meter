@@ -72,7 +72,7 @@ enum BatteryFormat {
     /// Caption above the headline figure.
     static func headlineCaption(for state: PowerState) -> String {
         switch state {
-        case .onBattery: "Estimated left"
+        case .onBattery(let timeLeft): timeLeft == nil ? "Estimating…" : "Estimated left"
         case .charging: "Charging"
         case .pluggedIn: "Plugged in"
         }
@@ -90,16 +90,19 @@ struct RuntimeHeadline: View {
     var highUseApps: [String] = []
 
     var body: some View {
+        let figure = MenuBarText.text(state: state, percent: reading.percent, format: .hours)
         VStack(alignment: .leading, spacing: 0) {
             HeadlineFigure(
                 caption: BatteryFormat.headlineCaption(for: state),
-                value: MenuBarText.text(state: state, percent: reading.percent, format: .hours),
-                isEstimate: isOnBattery && runtime?.isEstimate == true)
+                value: figure,
+                isEstimate: timeLeft != nil && runtime?.isEstimate == true)
             ChargeBar(reading: reading, state: state)
                 .padding(.top, 8)
             if isOnBattery, let runtime, let atPace = runtime.atPace, let watts = runtime.paceWatts {
-                PaceRow(atPace: atPace, watts: watts)
-                    .padding(.top, 8)
+                // The duration is dropped when it would only repeat the headline.
+                let duration = DurationText.short(atPace)
+                PaceRow(duration: timeLeft != nil && duration == figure ? nil : duration, watts: watts)
+                    .padding(.top, 12)
                 if runtime.isHighUse, !highUseApps.isEmpty {
                     HighUseLine(apps: highUseApps)
                         .padding(.top, 4)
@@ -110,6 +113,11 @@ struct RuntimeHeadline: View {
 
     private var isOnBattery: Bool {
         if case .onBattery = state { true } else { false }
+    }
+
+    /// The headline's time left on battery; nil off battery or while estimating.
+    private var timeLeft: TimeInterval? {
+        if case .onBattery(let timeLeft) = state { timeLeft } else { nil }
     }
 }
 
@@ -154,14 +162,14 @@ private struct EstimateTag: View {
 }
 
 private struct PaceRow: View {
-    let atPace: TimeInterval
+    let duration: String?
     let watts: Double
 
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
             Text("At this pace")
             Spacer(minLength: 8)
-            Text("\(DurationText.short(atPace)) · \(BatteryFormat.watts(watts))")
+            Text(duration.map { "\($0) · \(BatteryFormat.watts(watts))" } ?? BatteryFormat.watts(watts))
                 .monospacedDigit()
         }
         .foregroundStyle(.secondary)

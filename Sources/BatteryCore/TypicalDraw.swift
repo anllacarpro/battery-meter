@@ -1,6 +1,7 @@
 import Foundation
 
-/// The draw this Mac usually has on battery: the median over the last week.
+/// The draw this Mac usually has on battery: the mean over the last week. The mean, not
+/// the median, because spikes are real energy use and runtime follows the average draw.
 public enum TypicalDraw {
     public static let minReadings = 30
     private static let window: TimeInterval = 7 * 24 * 3600
@@ -10,9 +11,7 @@ public enum TypicalDraw {
         let samples = history
             .filter { !$0.externalConnected && $0.timestamp >= cutoff && $0.timestamp <= now }
             .map(\.powerWatts)
-            .sorted()
         guard samples.count >= minReadings else { return nil }
-        let mid = samples.count / 2
-        return samples.count.isMultiple(of: 2) ? (samples[mid - 1] + samples[mid]) / 2 : samples[mid]
+        return samples.reduce(0, +) / Double(samples.count)
     }
 }

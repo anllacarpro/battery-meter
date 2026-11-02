@@ -17,7 +17,7 @@ final class BatteryModel {
     var fullCharge: FullChargeEstimate?
     /// Time left on battery (headline and at-pace); nil on AC or with no battery.
     var runtime: RuntimeEstimate?
-    /// Median on-battery draw over the last week; nil until there are enough readings.
+    /// Mean on-battery draw over the last week; nil until there are enough readings.
     var typicalWatts: Double?
     var history: [BatteryReading] = []
     /// False until the first history load lands (or a reset empties it); until then
