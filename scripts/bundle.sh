@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 # Builds a release binary and wraps it in "build/Battery Meter.app" (ad hoc signed).
+#   --install  also quits any running copy and installs to ~/Applications/Battery Meter.app
 set -euo pipefail
+
+INSTALL=0
+for arg in "$@"; do
+    case "$arg" in
+        --install) INSTALL=1 ;;
+        *) echo "usage: $0 [--install]" >&2; exit 64 ;;
+    esac
+done
 
 cd "$(dirname "$0")/.."
 
@@ -17,6 +26,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
     <key>CFBundleIdentifier</key>
     <string>com.noodlexz.BatteryMeter</string>
     <key>CFBundleName</key>
@@ -41,3 +52,13 @@ PLIST
 
 codesign --force --sign - "$APP"
 echo "Built $APP"
+
+if [[ $INSTALL -eq 1 ]]; then
+    DEST="$HOME/Applications/Battery Meter.app"
+    # Not running is fine.
+    osascript -e 'quit app "Battery Meter"' >/dev/null 2>&1 || true
+    mkdir -p "$HOME/Applications"
+    rm -rf "$DEST"
+    ditto "$APP" "$DEST"
+    echo "Installed $DEST"
+fi

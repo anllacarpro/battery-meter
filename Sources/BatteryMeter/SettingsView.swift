@@ -25,14 +25,25 @@ final class SettingsState {
         refreshLaunchAtLogin()
     }
 
-    /// On first launch, turn launch at login on once so it's the default; afterwards the
-    /// user's choice (here or in System Settings) is left alone.
+    /// On first launch of the installed app, turn launch at login on once so it's the
+    /// default; afterwards the user's choice (here or in System Settings) is left alone.
+    /// Runs from `build/` or unbundled binaries don't use up the offer, and a failed
+    /// registration is shown under the toggle and retried at the next launch.
     func offerLaunchAtLoginOnce() {
         let defaults = UserDefaults.standard
-        guard !defaults.bool(forKey: "didOfferLaunchAtLogin") else { return }
-        defaults.set(true, forKey: "didOfferLaunchAtLogin")
-        if SMAppService.mainApp.status == .notRegistered {
-            try? SMAppService.mainApp.register()
+        guard !defaults.bool(forKey: "didOfferLaunchAtLogin"),
+              InstallLocation.isInstalled(Bundle.main.bundleURL) else { return }
+        let status = SMAppService.mainApp.status
+        if status == .enabled || status == .requiresApproval {
+            defaults.set(true, forKey: "didOfferLaunchAtLogin")
+        } else {
+            do {
+                try SMAppService.mainApp.register()
+                defaults.set(true, forKey: "didOfferLaunchAtLogin")
+                launchAtLoginError = nil
+            } catch {
+                launchAtLoginError = error.localizedDescription
+            }
         }
         refreshLaunchAtLogin()
     }
