@@ -12,7 +12,7 @@ enum SnapshotRenderer {
         return URL(fileURLWithPath: args[i + 1], isDirectory: true)
     }
 
-    static func run(model: BatteryModel, reports: ReportsModel, to dir: URL) async {
+    static func run(model: BatteryModel, reports: ReportsModel, sampler: EnergySampler, to dir: URL) async {
         await model.loadHistory(pruning: false)
         model.refresh(record: false)
         // Synthetic history lives only in this in-memory model; its store points at
@@ -47,7 +47,7 @@ enum SnapshotRenderer {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         for scheme in [ColorScheme.light, .dark] {
             let suffix = scheme == .light ? "light" : "dark"
-            write(PopoverView(model: model), scheme: scheme, to: dir.appending(path: "popover-\(suffix).png"))
+            write(PopoverView(model: model, sampler: sampler, actions: .inert), scheme: scheme, to: dir.appending(path: "popover-\(suffix).png"))
             write(EmptyStateView().padding(16).frame(width: 300), scheme: scheme,
                   to: dir.appending(path: "empty-\(suffix).png"))
             for (name, item, source, report, state, height) in [
@@ -169,6 +169,11 @@ enum SnapshotRenderer {
         }
         return nil
     }
+}
+
+private extension PopoverActions {
+    /// Snapshots never click.
+    static var inert: PopoverActions { PopoverActions(openWindow: {}, openReports: {}, openSettings: {}, quit: {}) }
 }
 
 /// About 90 days of synthetic readings: one plugged-in reading a day with health easing

@@ -34,6 +34,9 @@ final class BatteryModel {
     /// after a retention change, or a shrink. The App wires it to force a report rebuild,
     /// whether or not a pane is showing.
     @ObservationIgnored var onHistoryLoaded: (@MainActor () -> Void)?
+    /// Called at the end of every `refresh`, with or without a reading; the status item
+    /// redraws its label from it.
+    @ObservationIgnored var onRefresh: (@MainActor () -> Void)?
     @ObservationIgnored private var estimator = PowerEstimator()
     @ObservationIgnored private var timer: Timer?
     @ObservationIgnored private var typicalTimer: Timer?
@@ -163,6 +166,7 @@ final class BatteryModel {
             liveAmps = nil
             fullCharge = nil
             runtime = nil
+            onRefresh?()
             return
         }
         self.reading = reading
@@ -184,6 +188,7 @@ final class BatteryModel {
             learned = FullChargeLearner.estimate(history: history, current: nil, fallbackWatts: nil)
         }
         updateFullCharge()
+        onRefresh?()
     }
 
     /// Due once a minute. A clock set back (`at` earlier than the last recording) also

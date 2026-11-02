@@ -1,15 +1,26 @@
 import SwiftUI
 import BatteryCore
 
+/// What the popover's buttons do; the status item controller supplies them.
+struct PopoverActions {
+    var openWindow: () -> Void
+    var openReports: () -> Void
+    var openSettings: () -> Void
+    var quit: () -> Void
+}
+
 struct PopoverView: View {
     let model: BatteryModel
+    /// Not read yet; the top apps section (Task 5) uses it.
+    let sampler: EnergySampler
+    let actions: PopoverActions
 
     var body: some View {
         Group {
             if let reading = model.reading, let state = model.state {
                 PopoverContent(
                     reading: reading, state: state,
-                    liveWatts: model.liveWatts, fullCharge: model.fullCharge)
+                    liveWatts: model.liveWatts, fullCharge: model.fullCharge, actions: actions)
             } else {
                 EmptyStateView()
             }
@@ -24,6 +35,7 @@ private struct PopoverContent: View {
     let state: PowerState
     let liveWatts: Double?
     let fullCharge: FullChargeEstimate?
+    let actions: PopoverActions
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -32,7 +44,7 @@ private struct PopoverContent: View {
                 .padding(.top, 10)
             TileGrid(tiles: tiles)
                 .padding(.top, 12)
-            Footer()
+            Footer(actions: actions)
                 .padding(.top, 12)
         }
     }
@@ -71,7 +83,7 @@ private struct Header: View {
 }
 
 private struct Footer: View {
-    @Environment(\.openWindow) private var openWindow
+    let actions: PopoverActions
     /// Shared with MainWindow, so writing it here picks the pane the window opens on.
     @AppStorage("sidebarSelection") private var selection: SidebarItem = .overview
 
@@ -80,8 +92,7 @@ private struct Footer: View {
             Divider()
             Button {
                 selection = .history
-                NSApp.activate()
-                openWindow(id: "main")
+                actions.openWindow()
             } label: {
                 HStack {
                     Text("Open history…")
@@ -96,7 +107,7 @@ private struct Footer: View {
             .padding(.top, 10)
 
             Button {
-                NSApp.terminate(nil)
+                actions.quit()
             } label: {
                 HStack {
                     Text("Quit Battery Meter")

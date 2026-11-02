@@ -4,7 +4,7 @@ import ServiceManagement
 import BatteryCore
 
 /// Settings-pane state that can't live in `@State` under Command Line Tools: the reset
-/// confirmation and the launch-at-login status. Owned by the App.
+/// confirmation and the launch-at-login status. Owned by the app delegate.
 @MainActor @Observable
 final class SettingsState {
     static let retentionOptions = [30, 90, 180, 365]
@@ -60,6 +60,15 @@ final class SettingsState {
             launchAtLoginError = error.localizedDescription
         }
         refreshLaunchAtLogin()
+    }
+
+    /// Flips launch at login from outside the Settings pane (the quick menu). Returns false
+    /// when it failed; the error then shows under the pane's toggle.
+    @discardableResult
+    func toggleLaunchAtLogin() -> Bool {
+        refreshLaunchAtLogin()
+        setLaunchAtLogin(!launchAtLogin)
+        return launchAtLoginError == nil
     }
 
     /// Re-reads the status, which can also change in System Settings.
