@@ -72,14 +72,16 @@ public struct ChargingReport: Equatable, Sendable {
         if let first = sorted.first, let last = sorted.last {
             let spanDays = last.timestamp.timeIntervalSince(first.timestamp) / day
             if spanDays >= 7 {
-                cycles = Double(last.cycleCount - first.cycleCount) / (spanDays / 7)
+                // A negative delta (for example after a battery replacement) is not meaningful.
+                let delta = last.cycleCount - first.cycleCount
+                if delta >= 0 { cycles = Double(delta) / (spanDays / 7) }
             }
         }
 
         // Most common adapter wattage; a tie goes to the higher wattage.
         var counts: [Int: Int] = [:]
         for r in sorted where r.externalConnected {
-            if let w = r.adapterWatts { counts[w, default: 0] += 1 }
+            if let w = r.adapterWatts, w > 0 { counts[w, default: 0] += 1 }
         }
         let charger = counts.max { ($0.value, $0.key) < ($1.value, $1.key) }?.key
 
