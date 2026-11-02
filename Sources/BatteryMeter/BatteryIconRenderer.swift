@@ -21,11 +21,13 @@ enum BatteryIconRenderer {
     private static let coloredFillAlpha: CGFloat = 0.9
     /// Space left of the body and right of the nub so the strokes are not clipped.
     private static let edgeSlack: CGFloat = 0.5
-    /// Digits on the bright red and green fills: dark in both appearances for contrast.
-    private static let coloredNumeralInk = NSColor(white: 0.05, alpha: 1)
-    /// The empty part of a colored icon in a dark appearance: a light plate, so the dark
-    /// numerals stay readable over it as well as over the fill.
-    private static let darkTrack = NSColor(white: 0.85, alpha: 0.9)
+    /// Digits on the bright red and green fills in a light appearance: near-black.
+    private static let lightNumeralInk = NSColor(white: 0.05, alpha: 1)
+    /// In a dark appearance the digits stay white (they also sit over the transparent
+    /// track), so the fill is darkened until white has at least 4.5:1 contrast on it. The
+    /// factors scale the system color's RGB toward black: white on red 5.1:1 (0.8), on
+    /// green 5.2:1 (0.6), computed from the dark system colors.
+    private static func darkFillScale(_ role: MenuBarColorRole) -> CGFloat { role == .low ? 0.8 : 0.6 }
     /// The bolt as unit-square points, origin bottom-left.
     private static let boltPoints: [(CGFloat, CGFloat)] = [
         (0.72, 1), (0, 0.55), (0.44, 0.55), (0.28, 0), (1, 0.65), (0.54, 0.65)]
@@ -62,7 +64,15 @@ enum BatteryIconRenderer {
         case .low: .systemRed
         case .charging: .systemGreen
         }
-        let fillColor = template ? tint.withAlphaComponent(templateFillAlpha) : tint.withAlphaComponent(coloredFillAlpha)
+        let dark = (ink.usingColorSpace(.deviceRGB)?.brightnessComponent ?? 0) > 0.5
+        let fillColor: NSColor = if template {
+            tint.withAlphaComponent(templateFillAlpha)
+        } else if dark {
+            (tint.blended(withFraction: 1 - darkFillScale(role), of: .black) ?? tint)
+                .withAlphaComponent(coloredFillAlpha)
+        } else {
+            tint.withAlphaComponent(coloredFillAlpha)
+        }
 
         let bodyX = (charging ? boltSize.width + boltGap : 0) + edgeSlack
         let outer = NSRect(x: bodyX, y: 0, width: bodyWidth, height: height)
@@ -70,10 +80,6 @@ enum BatteryIconRenderer {
         // Level fill (a visible sliver above 0%), under the outline and numerals.
         let inner = outer.insetBy(dx: fillInset, dy: fillInset)
         let radius = cornerRadius - fillInset
-        if !template, (ink.usingColorSpace(.deviceRGB)?.brightnessComponent ?? 0) > 0.5 {
-            darkTrack.setFill()
-            NSBezierPath(roundedRect: inner, xRadius: radius, yRadius: radius).fill()
-        }
         if percent > 0 {
             let width = max(2, inner.width * CGFloat(percent) / 100)
             fillColor.setFill()
@@ -96,7 +102,7 @@ enum BatteryIconRenderer {
 
         // Numerals, once, centered in the body.
         let font = NSFont.monospacedDigitSystemFont(ofSize: fontSize, weight: .bold)
-        let numeralInk = template ? ink : coloredNumeralInk
+        let numeralInk = template || dark ? ink : lightNumeralInk
         let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: numeralInk]
         let text = "\(percent)" as NSString
         let textSize = text.size(withAttributes: attributes)
