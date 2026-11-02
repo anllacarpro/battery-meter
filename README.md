@@ -75,3 +75,5 @@ bash scripts/release.sh
 ## Contributing
 
 Issues and pull requests are welcome. Please run `swift test` before opening a PR.
+
+`main` is protected by [repository rulesets](.github/GOVERNANCE.md) (PR + CI required). Release tags `v*` cannot be deleted via ruleset policy.

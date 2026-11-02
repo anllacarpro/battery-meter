@@ -1,0 +1,35 @@
+name: Governance
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply_rulesets:
+        description: Apply .github/rulesets to this repository
+        type: boolean
+        default: true
+      apply_repo_settings:
+        description: Apply delete-branch-on-merge and merge options
+        type: boolean
+        default: true
+
+permissions:
+  administration: write
+  contents: read
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply rulesets
+        if: inputs.apply_rulesets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash scripts/apply-github-rulesets.sh "${{ github.repository }}"
+
+      - name: Apply repository settings
+        if: inputs.apply_repo_settings
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash scripts/apply-github-repo-settings.sh "${{ github.repository }}"
