@@ -289,3 +289,27 @@ App behavior:
 - [ ] **Step 5:** In snapshot mode render `menubar-icons-{light,dark}.png` (the icon at 100, 85, 50, 20, 8 and 5 percent; template and colored; charging) and `window-settings-menubar-{light,dark}.png`. View every PNG and fix legibility, the percentage inside the icon, spacing and contrast. Check that the snapshot run writes nothing.
 - [ ] **Step 6:** Run `bash scripts/bundle.sh` (don't install or open it) and do the 8 s smoke run again, since the status item changed.
 - [ ] **Step 7:** Commit with the message `feat: menu bar personalization`.
+
+### Task 7: native-style battery icon (owner feedback after Task 6)
+
+The owner said the custom icon should look like the native one and be easy to read with the percentage. The first version had a heavy outline and numerals split by the fill edge (for example "5|0"), which read badly at real size.
+
+**Files:**
+- Modify: `Sources/BatteryMeter/BatteryIconRenderer.swift`, `Sources/BatteryMeter/SnapshotRenderer.swift`
+
+**Design decisions (assistant's, not confirmed by the owner):**
+- Proportions follow the native symbol: a body about 25 × 12 pt with a corner radius of about 3.5 pt, a 1 pt outline at about 45% alpha, a nub of about 1.5 × 4.5 pt at the same alpha, and a level fill inset about 1.5 pt with its own rounded corners.
+- The numerals are drawn in one pass in the ink color, on top of the fill. The level fill is translucent in template mode (about 35% alpha), so the digits stay equally legible over the filled and the empty part. No complementary clip regions, so no seam.
+- In colored mode (red low, green charging) the fill is the color at high alpha and the numerals use the ink color that gives the best contrast against it in both appearances; check this in the snapshots and pick per appearance if needed.
+- While charging, the bolt is a separate glyph to the left of the battery, outside the body, so it never overlaps the digits. The image gets wider by the bolt width and a small gap.
+- "100" fits with at least 1 pt of padding on each side. The public API `BatteryIconRenderer.image(percent:charging:role:)` is unchanged.
+
+**Acceptance (verified in snapshots):**
+- `menubar-icons-native-{light,dark}.png` shows, for 100, 85, 50, 20, 8 and 5 percent, the native SF Symbol (`battery.100percent`, `.75percent`, `.50percent`, `.25percent`, `.0percent`) above the new icon at the same height, at 4x and at real size, in template, red, charging and green-charging variants. The stroke weight, corner radius and nub match the native symbol closely.
+- The numerals are legible at real size in every row, and no row has a seam through a digit.
+- The Settings preview and the real status item use the same renderer, so both change together.
+
+- [ ] **Step 1:** Rework the renderer to the decisions above.
+- [ ] **Step 2:** Add the side-by-side snapshot sheet and look at every PNG. Fix proportions, contrast and legibility until the acceptance holds.
+- [ ] **Step 3:** Run `swift build` (no Swift warnings) and `swift test`, check the snapshot run writes nothing, run `bash scripts/bundle.sh` (don't install or open it) and do the 8 s smoke run.
+- [ ] **Step 4:** Commit with the message `fix: native-style battery icon with readable percentage`.
