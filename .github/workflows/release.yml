@@ -16,7 +16,7 @@ jobs:
       version: ${{ steps.version.outputs.tag }}
       sha256: ${{ steps.checksum.outputs.sha256 }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Resolve version from tag
         id: version
@@ -36,7 +36,7 @@ jobs:
           echo "Release asset sha256: $SHA"
 
       - name: Upload release asset
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: dist/Battery-Meter-*.zip
           generate_release_notes: true
@@ -45,7 +45,7 @@ jobs:
     needs: release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
@@ -64,7 +64,7 @@ jobs:
           echo "$VERSION" > VERSION
 
       - name: Open PR with cask checksum
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           commit-message: "chore(homebrew): bump cask to v${{ needs.release.outputs.version }}"
           branch: automation/bump-cask-v${{ needs.release.outputs.version }}
