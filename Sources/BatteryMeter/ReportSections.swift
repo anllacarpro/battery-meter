@@ -354,7 +354,15 @@ private struct WakeReasons: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            SubHeading("What woke the Mac")
+            VStack(alignment: .leading, spacing: 1) {
+                SubHeading("What woke the Mac")
+                // These counts include wakes on power and dark wakes, so the card's
+                // "on battery" subtitle doesn't cover them.
+                Text("All wakes, last 7 days")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.bottom, 2)
             Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 3) {
                 ForEach(reasons, id: \.reason) { item in
                     GridRow {

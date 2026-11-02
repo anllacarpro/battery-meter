@@ -172,7 +172,8 @@ private struct ThisWeekSection: View {
         }
         // Hidden, not zero, when the sleep log couldn't be read.
         if let perHour = report.sleep?.percentPerHour {
-            result.append(Tile(title: "Sleep drain", value: ReportFormat.perHour(perHour)))
+            // A rolling window, unlike the calendar-week tiles beside it.
+            result.append(Tile(title: "Sleep drain", value: ReportFormat.perHour(perHour), caption: "last 7 days"))
         }
         return result
     }
