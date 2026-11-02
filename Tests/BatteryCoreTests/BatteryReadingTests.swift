@@ -48,4 +48,22 @@ import Foundation
     @Test func zeroNominalCountsAsMissing() {
         #expect(abs(reading(full: 4575, nominal: 0).healthPercent - 98.83) < 0.01)
     }
+
+    @Test func nominalAboveDesignCapsAtOneHundred() {
+        #expect(reading(full: 4666, nominal: 4771).healthPercent == 100)
+    }
+
+    @Test func legacyLineWithoutNominalDecodesAndFallsBack() throws {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(reading(full: 4575, nominal: 4400))
+        var object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        object.removeValue(forKey: "nominalChargeCapacity")
+        let legacy = try JSONSerialization.data(withJSONObject: object)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(BatteryReading.self, from: legacy)
+        #expect(decoded.nominalChargeCapacity == nil)
+        #expect(abs(decoded.healthPercent - 98.83) < 0.01)
+    }
 }

@@ -13,11 +13,15 @@ public struct HealthPoint: Identifiable, Equatable, Sendable {
 
 public enum DailyHealth {
     /// Daily mean of `healthPercent`. Buckets by local day with one UTC offset, which
-    /// avoids a Calendar call per reading (history holds ~260k of them).
+    /// avoids a Calendar call per reading (history holds ~260k of them). Once any reading
+    /// carries a nominal capacity, readings without one are skipped: their health comes from
+    /// full charge capacity, which runs lower and would make the trend jump upward.
     public static func points(in history: [BatteryReading]) -> [HealthPoint] {
         let offset = TimeInterval(TimeZone.current.secondsFromGMT())
+        let hasNominal = history.contains { ($0.nominalChargeCapacity ?? 0) > 0 }
         var sums: [Int: (total: Double, count: Int)] = [:]
         for reading in history where reading.designCapacity > 0 {
+            if hasNominal, (reading.nominalChargeCapacity ?? 0) <= 0 { continue }
             let day = Int(((reading.timestamp.timeIntervalSince1970 + offset) / 86_400).rounded(.down))
             sums[day, default: (0, 0)].total += reading.healthPercent
             sums[day, default: (0, 0)].count += 1

@@ -147,13 +147,15 @@ struct SettingsView: View {
         panel.nameFieldStringValue = "battery-history.csv"
         panel.allowedContentTypes = [.commaSeparatedText]
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        do {
-            try model.exportHistory(to: url)
-        } catch {
-            let alert = NSAlert()
-            alert.messageText = "Couldn't export history"
-            alert.informativeText = error.localizedDescription
-            alert.runModal()
+        Task { @MainActor in
+            do {
+                try await model.exportHistory(to: url)
+            } catch {
+                let alert = NSAlert()
+                alert.messageText = "Couldn't export history"
+                alert.informativeText = error.localizedDescription
+                alert.runModal()
+            }
         }
     }
 
