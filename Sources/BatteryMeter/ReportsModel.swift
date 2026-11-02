@@ -57,7 +57,8 @@ final class ReportsModel {
             let text = logText
             let built = await Task.detached(priority: .utility) {
                 BatteryReport.build(
-                    history: history, powerEvents: SleepLog.parse(text ?? ""),
+                    // No log (pmset failed or timed out, nothing cached) is unknown, not "no sleep".
+                    history: history, powerEvents: text.map(SleepLog.parse),
                     appEnergy: store.load(), now: now, calendar: .current)
             }.value
             guard gen == self.generation else { return }

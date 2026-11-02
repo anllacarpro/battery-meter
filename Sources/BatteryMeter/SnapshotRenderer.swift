@@ -33,6 +33,11 @@ enum SnapshotRenderer {
             battery: sample, energyStore: AppEnergyStore(fileURL: URL(fileURLWithPath: "/dev/null")),
             logSource: PowerLogSource())
         sampleReports.showSnapshot(SampleReport.make(history: sample.history))
+        // Review-only: the same sample with an unreadable sleep log.
+        let noLogReports = ReportsModel(
+            battery: sample, energyStore: AppEnergyStore(fileURL: URL(fileURLWithPath: "/dev/null")),
+            logSource: PowerLogSource())
+        noLogReports.showSnapshot(SampleReport.make(history: sample.history, sleepLog: false))
 
         // Reads the login-item status only; never registers or sets didOfferLaunchAtLogin.
         let settings = SettingsState()
@@ -52,6 +57,9 @@ enum SnapshotRenderer {
                 // Review-only: the whole pane, to check every section.
                 ("reports-tall", .reports, model, reports, settings, 1700),
                 ("reports-sample-tall", .reports, sample, sampleReports, settings, 2000),
+                ("reports-sample-nolog-tall", .reports, sample, noLogReports, settings, 2000),
+                ("overview-sample", .overview, model, sampleReports, settings, 620),
+                ("overview-sample-nolog", .overview, model, noLogReports, settings, 620),
                 ("history", .history, model, reports, settings, 520),
                 ("health", .health, model, reports, settings, 520),
                 ("history-sample", .history, sample, reports, settings, 520),
@@ -212,7 +220,7 @@ private enum SampleHistory {
 /// periods and 8 apps. The health trend is built from the sample history so the sentence
 /// matches the chart drawn from that same history.
 private enum SampleReport {
-    static func make(history: [BatteryReading]) -> BatteryReport {
+    static func make(history: [BatteryReading], sleepLog: Bool = true) -> BatteryReport {
         let cal = Calendar.current
         let now = Date()
         let today = cal.startOfDay(for: now)
@@ -263,7 +271,7 @@ private enum SampleReport {
         return BatteryReport(
             generated: now, usage: UsageReport(days: days, weeks: weeks), sessions: sessions,
             charging: charging, health: HealthTrend.build(points: points), healthPoints: points,
-            sleep: sleep, apps: apps)
+            sleep: sleepLog ? sleep : nil, apps: apps)
     }
 }
 #endif

@@ -54,6 +54,7 @@ import Foundation
         #expect(report.health == HealthTrend.build(points: DailyHealth.points(in: history)))
         #expect(report.healthPoints == DailyHealth.points(in: history))
         #expect(!report.healthPoints.isEmpty)
+        #expect(report.sleep != nil)
         #expect(report.sleep == SleepReport.build(events: Self.events, now: Self.now))
         #expect(report.apps == AppEnergyReport.build(days: Self.appEnergy, now: Self.now, calendar: Self.calendar))
         #expect(!report.apps.isEmpty)
@@ -62,5 +63,22 @@ import Foundation
         #expect(oldestFirst.count == 2)
         #expect(report.sessions == Array(oldestFirst.reversed()))
         #expect(report.sessions[0].start > report.sessions[1].start)
+    }
+
+    @Test func unreadableSleepLogLeavesSleepUnknown() {
+        let history = Self.history()
+        let report = BatteryReport.build(
+            history: history, powerEvents: nil, appEnergy: Self.appEnergy,
+            now: Self.now, calendar: Self.calendar)
+        #expect(report.sleep == nil)
+        // Everything else is still built.
+        #expect(report.usage == UsageReport.build(history: history, now: Self.now, calendar: Self.calendar))
+        #expect(report.sessions.count == 2)
+    }
+
+    @Test func emptySleepLogIsNoSleepNotUnknown() {
+        let report = BatteryReport.build(
+            history: [], powerEvents: [], appEnergy: [:], now: Self.now, calendar: Self.calendar)
+        #expect(report.sleep == SleepReport(periods: [], percentPerHour: nil, wakeReasons: []))
     }
 }

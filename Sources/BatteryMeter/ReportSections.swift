@@ -311,27 +311,39 @@ struct HealthTrendSection: View {
 struct SleepSection: View {
     static let periodCount = 7
 
-    let sleep: SleepReport
+    /// `nil` when the sleep log couldn't be read.
+    let sleep: SleepReport?
 
     var body: some View {
         ChartCard(title: "Sleep drain", subtitle: "Charge lost while asleep on battery, last 7 days") {
-            if sleep.periods.isEmpty {
-                emptyState("No sleep on battery in the last 7 days.", symbol: "moon.zzz")
+            if let sleep {
+                content(sleep)
             } else {
-                VStack(alignment: .leading, spacing: 16) {
-                    HStack(alignment: .top, spacing: 20) {
-                        if let perHour = sleep.percentPerHour {
-                            StatTile(title: "Average drain", value: ReportFormat.perHour(perHour),
-                                     caption: "while asleep", fill: AnyShapeStyle(ChartSurface.card))
-                                .frame(width: 170)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        if !sleep.wakeReasons.isEmpty {
-                            WakeReasons(reasons: sleep.wakeReasons)
-                        }
+                NotEnoughHistory(title: "Sleep log unavailable",
+                                 message: "Couldn't read the sleep log. Reports try again in a few minutes.",
+                                 symbol: "moon.zzz", compact: true)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func content(_ sleep: SleepReport) -> some View {
+        if sleep.periods.isEmpty {
+            emptyState("No sleep on battery in the last 7 days.", symbol: "moon.zzz")
+        } else {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(alignment: .top, spacing: 20) {
+                    if let perHour = sleep.percentPerHour {
+                        StatTile(title: "Average drain", value: ReportFormat.perHour(perHour),
+                                 caption: "while asleep", fill: AnyShapeStyle(ChartSurface.card))
+                            .frame(width: 170)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    PeriodsTable(periods: Array(sleep.periods.prefix(Self.periodCount)))
+                    if !sleep.wakeReasons.isEmpty {
+                        WakeReasons(reasons: sleep.wakeReasons)
+                    }
                 }
+                PeriodsTable(periods: Array(sleep.periods.prefix(Self.periodCount)))
             }
         }
     }

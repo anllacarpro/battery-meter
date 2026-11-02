@@ -170,7 +170,8 @@ private struct ThisWeekSection: View {
             result.append(Tile(title: "Battery time", value: DurationText.short(week.batteryTime)))
             result.append(Tile(title: "Charge used", value: "\(week.percentUsed)%"))
         }
-        if let perHour = report.sleep.percentPerHour {
+        // Hidden, not zero, when the sleep log couldn't be read.
+        if let perHour = report.sleep?.percentPerHour {
             result.append(Tile(title: "Sleep drain", value: ReportFormat.perHour(perHour)))
         }
         return result
