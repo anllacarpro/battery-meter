@@ -22,6 +22,11 @@ struct BatteryMeterApp: App {
             reports?.handleReset()
             sampler?.handleReset()
         }
+        // A report built before the history loads would be empty, so `refresh` waits for
+        // it; each new history window (launch load, retention change) forces a rebuild.
+        model.onHistoryLoaded = { [weak reports] in
+            reports?.refresh(force: true)
+        }
         self.model = model
         self.reports = reports
         self.sampler = sampler

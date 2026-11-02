@@ -15,6 +15,9 @@ final class BatteryModel {
     var liveAmps: Double?
     var fullCharge: FullChargeEstimate?
     var history: [BatteryReading] = []
+    /// False until the first history load lands (or a reset empties it); until then
+    /// `history` is just a placeholder and nothing should be built from it.
+    private(set) var isHistoryLoaded = false
 
     @ObservationIgnored private let source = IOKitBatterySource()
     @ObservationIgnored private let store: HistoryStore
@@ -22,12 +25,15 @@ final class BatteryModel {
     /// Called at the end of `resetLearnedData()`; the App wires it to the report model and
     /// the energy sampler so neither keeps showing or writing pre-reset data.
     @ObservationIgnored var onReset: (@MainActor () -> Void)?
+    /// Called whenever `history` is replaced by a new window: the launch load, a reload
+    /// after a retention change, or a shrink. The App wires it to force a report rebuild,
+    /// whether or not a pane is showing.
+    @ObservationIgnored var onHistoryLoaded: (@MainActor () -> Void)?
     @ObservationIgnored private var estimator = PowerEstimator()
     @ObservationIgnored private var timer: Timer?
     /// Held for the app's lifetime so App Nap can't stretch the 10 s timer past the
     /// 300 s gap rule (which would split every session). Idle system sleep is still allowed.
     @ObservationIgnored private var activity: NSObjectProtocol?
-    @ObservationIgnored private var historyLoaded = false
     /// Days of history `history` currently covers (0 until the first load lands).
     @ObservationIgnored private var coveredDays = 0
     /// Bumped by reset and retention changes; a load that finishes under an older
@@ -78,12 +84,13 @@ final class BatteryModel {
     /// file is pruned at the next launch); growing reloads the wider window from disk.
     func applyRetention(days: Int) {
         generation += 1
-        if historyLoaded, days <= coveredDays {
+        if isHistoryLoaded, days <= coveredDays {
             coveredDays = days
             let cutoff = Self.cutoff(days: days)
             history.removeAll { $0.timestamp < cutoff }
             learned = FullChargeLearner.estimate(history: history, current: nil, liveWatts: nil)
             updateFullCharge()
+            onHistoryLoaded?()
         } else {
             Task { await load(days: days, pruning: false) }
         }
@@ -111,8 +118,9 @@ final class BatteryModel {
             ? loaded.learned
             : FullChargeLearner.estimate(history: history, current: nil, liveWatts: nil)
         coveredDays = days
-        historyLoaded = true
+        isHistoryLoaded = true
         updateFullCharge()
+        onHistoryLoaded?()
     }
 
     func refresh(record: Bool) {
@@ -133,7 +141,7 @@ final class BatteryModel {
         liveAmps = estimator.liveAmps
 
         // Recording waits for the initial load so nothing is read back twice.
-        if record, historyLoaded, isTimeToRecord(at: reading.timestamp) {
+        if record, isHistoryLoaded, isTimeToRecord(at: reading.timestamp) {
             lastRecorded = reading.timestamp
             try? store.append(reading)
             history.append(reading)
@@ -161,7 +169,7 @@ final class BatteryModel {
         learned = nil
         // The empty history is now authoritative, even if the initial load never landed.
         coveredDays = retentionDays
-        historyLoaded = true
+        isHistoryLoaded = true
         updateFullCharge()
         onReset?()
     }

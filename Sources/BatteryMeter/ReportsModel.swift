@@ -29,7 +29,11 @@ final class ReportsModel {
         self.logSource = logSource
     }
 
+    /// Does nothing until the battery history has loaded, so a report is never built from
+    /// the empty placeholder (and then kept by the throttle); "Building reports…" stays up
+    /// instead. `BatteryModel.onHistoryLoaded` forces the first build once it lands.
     func refresh(force: Bool = false) {
+        guard battery.isHistoryLoaded else { return }
         let now = Date()
         // A clock set back (now before the last build) counts as due.
         if !force, let last = lastBuild, now >= last, now.timeIntervalSince(last) < Self.rebuildInterval {
