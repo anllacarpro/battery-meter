@@ -50,13 +50,14 @@ final class BatteryModel {
         Task { await loadHistory() }
     }
 
-    /// Loads the retention window once (off the main actor) and prunes the file once.
-    func loadHistory() async {
+    /// Loads the retention window once (off the main actor) and, when `pruning`, prunes
+    /// the file once. Snapshot rendering passes `false` so the file is never rewritten.
+    func loadHistory(pruning: Bool = true) async {
         let store = self.store
         let cutoff = retentionCutoff
         let loaded = await Task.detached(priority: .utility) {
             let readings = store.load(since: cutoff)
-            try? store.prune(olderThan: cutoff)
+            if pruning { try? store.prune(olderThan: cutoff) }
             return (readings, FullChargeLearner.estimate(history: readings, current: nil, liveWatts: nil))
         }.value
         history = loaded.0

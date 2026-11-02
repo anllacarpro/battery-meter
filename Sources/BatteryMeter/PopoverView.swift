@@ -38,26 +38,12 @@ private struct PopoverContent: View {
     }
 
     private var tiles: [Tile] {
-        var result: [Tile] = []
-        if let fullCharge {
-            result.append(Tile(
-                title: "Per full charge",
-                value: DurationText.short(fullCharge.hours * 3600),
-                caption: fullCharge.isEstimate ? "estimate" : nil))
-        }
-        result.append(Tile(
-            title: "Health",
-            value: reading.healthPercent.formatted(.number.precision(.fractionLength(1))) + "%"))
-        result.append(Tile(
-            title: "Cycles",
-            value: reading.designCycleCount.map { "\(reading.cycleCount) of \($0)" }
-                ?? "\(reading.cycleCount)"))
-        if let liveWatts {
-            result.append(Tile(
-                title: "Power draw",
-                value: liveWatts.formatted(.number.precision(.fractionLength(1))) + " W"))
-        }
-        return result
+        [
+            BatteryTiles.fullCharge(fullCharge),
+            BatteryTiles.health(reading),
+            BatteryTiles.cycles(reading),
+            BatteryTiles.power(state: state, watts: liveWatts),
+        ].compactMap { $0 }
     }
 }
 
@@ -79,87 +65,9 @@ private struct Header: View {
         .accessibilityElement(children: .combine)
     }
 
-    private var caption: String {
-        switch state {
-        case .onBattery: "Left right now"
-        case .charging: "Charging"
-        case .pluggedIn: "Plugged in"
-        }
-    }
+    private var caption: String { BatteryFormat.headlineCaption(for: state) }
 
     private var bigText: String { MenuBarLabel.text(for: reading, state: state) }
-}
-
-private struct ChargeBar: View {
-    let reading: BatteryReading
-    let state: PowerState
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ProgressView(value: Double(min(max(reading.percent, 0), 100)), total: 100)
-                .progressViewStyle(CapsuleProgressStyle())
-                .tint(reading.percent <= 20 ? .yellow : .green)
-            Text("\(reading.percent)% · \(source)")
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
-        }
-    }
-
-    private var source: String {
-        switch state {
-        case .onBattery: "on battery"
-        case .charging: "charging"
-        case .pluggedIn: "plugged in"
-        }
-    }
-}
-
-private struct CapsuleProgressStyle: ProgressViewStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        let fraction = configuration.fractionCompleted ?? 0
-        Capsule()
-            .fill(.quaternary)
-            .overlay(alignment: .leading) {
-                GeometryReader { proxy in
-                    Capsule()
-                        .fill(.tint)
-                        .frame(width: proxy.size.width * fraction)
-                }
-            }
-            .clipShape(.capsule)
-            .frame(height: 8)
-            .animation(.default, value: fraction)
-    }
-}
-
-private struct Tile: Identifiable {
-    var title: String
-    var value: String
-    var caption: String? = nil
-    var id: String { title }
-}
-
-private struct TileGrid: View {
-    let tiles: [Tile]
-
-    var body: some View {
-        Grid(horizontalSpacing: 8, verticalSpacing: 8) {
-            ForEach(rows, id: \.first?.id) { row in
-                GridRow {
-                    ForEach(row) { tile in
-                        StatTile(title: tile.title, value: tile.value, caption: tile.caption)
-                    }
-                    if row.count == 1 {
-                        Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
-                    }
-                }
-            }
-        }
-    }
-
-    private var rows: [[Tile]] {
-        stride(from: 0, to: tiles.count, by: 2).map { Array(tiles[$0..<min($0 + 2, tiles.count)]) }
-    }
 }
 
 private struct Footer: View {
