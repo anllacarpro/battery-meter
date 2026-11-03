@@ -1,18 +1,18 @@
 # Releasing Battery Meter
 
-## Checklist
+## How a release happens
 
-1. Merge the Homebrew/distribution PR to `main` (needs `Casks/battery-meter.rb`, `scripts/release.sh`, and `.github/workflows/release.yml`).
-2. Bump [`VERSION`](VERSION) and the cask `version` line when shipping a new version line (for example `0.1.0` → `0.2.0`).
-3. Tag and push from `main`:
-   ```bash
-   git checkout main
-   git pull
-   git tag v0.1.0
-   git push origin v0.1.0
-   ```
-4. The **Release** workflow builds `Battery-Meter-<version>.zip`, attaches it to the GitHub release, and opens a PR **`chore(homebrew): bump cask to v…`** with the correct `sha256`.
-5. Merge that automation PR so the tap on `main` matches the published asset.
+Releases are automated by [release-please](https://github.com/googleapis/release-please-action) and need [Conventional Commits](https://www.conventionalcommits.org) on `main`.
+
+1. Merge normal PRs to `main`. `feat:` bumps the minor version, `fix:` the patch, and `feat!:` or a `BREAKING CHANGE:` footer the major.
+2. release-please keeps a PR titled **`chore(main): release X.Y.Z`** open. It updates [`VERSION`](VERSION) and `CHANGELOG.md`.
+3. Merge that PR when you want to ship. release-please creates the tag and the GitHub release.
+4. The **Release** workflow builds `Battery-Meter-<version>.zip`, attaches it to the release, and opens a PR **`chore(homebrew): bump cask to v…`** with the correct `sha256`.
+5. Merge that PR so the tap on `main` matches the published asset.
+
+One-time setting: **Settings → Actions → General → Workflow permissions** must allow "Read and write permissions" and "Allow GitHub Actions to create and approve pull requests".
+
+Manual fallback: pushing a `v*` tag from `main` runs the same Release workflow.
 
 Local dry run (optional):
 
