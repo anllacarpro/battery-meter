@@ -4,6 +4,14 @@ Native macOS menu bar app that shows **honest battery runtime**, health details 
 
 **Requires macOS 27 (Tahoe) or later** and a Mac with a built-in battery.
 
+<p align="center">
+  <img src="docs/screenshots/popover.png" alt="Battery Meter popover" width="260">
+  <img src="docs/screenshots/overview.png" alt="Overview window" width="420">
+</p>
+<p align="center">
+  <img src="docs/screenshots/reports.png" alt="Reports window" width="700">
+</p>
+
 ## Install with Homebrew
 
 This repo is a [Homebrew tap](https://docs.brew.sh/Taps). After the first [GitHub release](#releases) is published:
@@ -51,22 +59,18 @@ swift test
 
 ## Releases
 
-1. Bump [`VERSION`](VERSION) if needed and merge to `main`.
-2. Tag: `git tag v0.1.0 && git push origin v0.1.0`
-3. GitHub Actions publishes the zip and opens a PR that updates the Homebrew cask `sha256` — merge that PR before telling users to `brew upgrade`.
-
-Local release dry run:
-
-```bash
-bash scripts/release.sh
-```
+Releases are automated: merge the release PR that [release-please](https://github.com/googleapis/release-please-action) keeps open on `main`, and GitHub Actions publishes the zip and opens a PR that updates the Homebrew cask `sha256`. See [RELEASING.md](RELEASING.md) for the full flow.
 
 ## Features
 
-- Menu bar time remaining (smoothed from real power draw)
+- Menu bar time remaining, smoothed from real power draw, with a steady headline and the current pace
 - Control Center–style popover with health, cycles, and power draw
-- Full window with overview, history, health, and settings
+- Full window with overview, reports, history, health, and settings
+- Reports: weekly usage, discharge sessions, charging habits, health trend, sleep drain, and top battery users
+- Health matches macOS Maximum Capacity (capped at 100%) and advises a battery service below 80% health or near the rated cycle count
+- Export your history as CSV from Settings
 - Launch at login (optional)
+- Read-only and private: everything stays on your Mac
 
 ## License
 
