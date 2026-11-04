@@ -1,8 +1,8 @@
 cask "battery-meter" do
-  version "0.1.3"
+  version "0.2.0"
 
   # sha256 is updated by the Release workflow (PR: automation/bump-cask-v*).
-  sha256 "3f2a2484b0cfe08187997e6b016e965d071da0a9d2e3a23a1b9911ce506e2bb1"
+  sha256 "67f0f837bdfce62fb1c61402abf37aecbd5f7d8c8a75960c119235e2d0be8d31"
 
   url "https://github.com/anllacarpro/battery-meter/releases/download/v#{version}/Battery-Meter-#{version}.zip"
   name "Battery Meter"
