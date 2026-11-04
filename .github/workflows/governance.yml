@@ -13,23 +13,28 @@ on:
         default: true
 
 permissions:
-  administration: write
   contents: read
 
 jobs:
   apply:
     runs-on: ubuntu-latest
     steps:
+      - name: Require admin token
+        env:
+          REPO_ADMIN_TOKEN: ${{ secrets.REPO_ADMIN_TOKEN }}
+        run: |
+          test -n "$REPO_ADMIN_TOKEN" || { echo "Add the REPO_ADMIN_TOKEN secret (see .github/GOVERNANCE.md)." >&2; exit 1; }
+
       - uses: actions/checkout@v7
 
       - name: Apply rulesets
         if: inputs.apply_rulesets
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.REPO_ADMIN_TOKEN }}
         run: bash scripts/apply-github-rulesets.sh "${{ github.repository }}"
 
       - name: Apply repository settings
         if: inputs.apply_repo_settings
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.REPO_ADMIN_TOKEN }}
         run: bash scripts/apply-github-repo-settings.sh "${{ github.repository }}"

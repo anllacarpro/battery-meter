@@ -18,6 +18,8 @@ scripts/apply-github-repo-settings.sh anllacarpro/battery-meter
 
 Requires `gh` authenticated as a repo admin.
 
+The **Governance** workflow (manual `workflow_dispatch`) does the same from Actions. `GITHUB_TOKEN` cannot administer a repository, so it needs a `REPO_ADMIN_TOKEN` repository secret: a fine-grained personal access token for this repo with **Administration: Read and write**.
+
 ## CI required checks
 
 The **Protect main** ruleset expects these GitHub Actions check names (from [`.github/workflows/ci.yml`](workflows/ci.yml)):
