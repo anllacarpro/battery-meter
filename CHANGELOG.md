@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/anllacarpro/battery-meter/compare/v0.1.2...v0.1.3) (2026-11-04)
+
+
+### Bug Fixes
+
+* require macOS 27 in the cask and repair the governance workflow ([#17](https://github.com/anllacarpro/battery-meter/issues/17)) ([cc39234](https://github.com/anllacarpro/battery-meter/commit/cc39234bdeb9cbd16baf0005be4887e4002b0e12))
+
 ## [0.1.2](https://github.com/anllacarpro/battery-meter/compare/v0.1.1...v0.1.2) (2026-11-04)
 
 
