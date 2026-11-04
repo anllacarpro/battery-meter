@@ -2,7 +2,7 @@
 
 Native macOS menu bar app that shows **honest battery runtime**, health details macOS hides, and history over time. Read-only — no charge limiting or cloud sync.
 
-**Requires macOS 27 (Tahoe) or later** and a Mac with a built-in battery.
+**Requires macOS 27 (Golden Gate) or later** and a Mac with a built-in battery.
 
 <p align="center">
   <img src="docs/screenshots/popover.png" alt="Battery Meter popover" width="260">

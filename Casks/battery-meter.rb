@@ -9,7 +9,7 @@ cask "battery-meter" do
   desc "Menu bar battery monitor with runtime estimates, health details, and history"
   homepage "https://github.com/anllacarpro/battery-meter"
 
-  depends_on macos: ">= :sequoia"
+  depends_on macos: :golden_gate
 
   app "Battery Meter.app"
 
@@ -19,7 +19,7 @@ cask "battery-meter" do
   end
 
   caveats <<~EOS
-    Battery Meter requires macOS 27 (Tahoe) or later and a Mac with a built-in battery.
+    Battery Meter requires macOS 27 (Golden Gate) or later and a Mac with a built-in battery.
     The app is ad hoc signed; if macOS blocks it, remove quarantine:
       xattr -cr "/Applications/Battery Meter.app"
   EOS
