@@ -46,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         #endif
         settings.offerLaunchAtLoginOnce()
+        settings.updates.checkIfDue()
         let window = MainWindowController(model: model, reports: reports, hover: hover, settings: settings)
         windowController = window
         statusItemController = StatusItemController(model: model, sampler: sampler, settings: settings, window: window)

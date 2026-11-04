@@ -4,6 +4,7 @@ public enum QuickMenuAction: Equatable, Sendable {
     case open, reports, history, health, settings
     case setFormat(MenuBarFormat)
     case toggleLaunchAtLogin
+    case showUpdate
     case quit
 }
 
@@ -37,7 +38,8 @@ public struct QuickMenuItem: Equatable, Sendable {
 
 /// The right-click quick menu as plain data.
 public enum QuickMenu {
-    public static func items(format: MenuBarFormat, launchAtLogin: Bool) -> [QuickMenuItem] {
+    /// `updateVersion` adds a notice at the top when a newer release is out.
+    public static func items(format: MenuBarFormat, launchAtLogin: Bool, updateVersion: String? = nil) -> [QuickMenuItem] {
         let formats: [(MenuBarFormat, String)] = [
             (.hours, "Hours left"),
             (.percent, "Percent"),
@@ -45,7 +47,8 @@ public enum QuickMenu {
             (.watts, "Power draw"),
             (.none, "Icon only"),
         ]
-        return [
+        let notice = updateVersion.map { [QuickMenuItem(title: "Update available: \($0)…", action: .showUpdate), .separator] } ?? []
+        return notice + [
             QuickMenuItem(title: "Open Battery Meter", action: .open),
             QuickMenuItem(title: "Reports…", action: .reports),
             QuickMenuItem(title: "History…", action: .history),

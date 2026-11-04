@@ -151,7 +151,8 @@ final class StatusItemController: NSObject, NSMenuDelegate, NSPopoverDelegate {
         settings.refreshLaunchAtLogin()  // it can change in System Settings
         let menu = NSMenu()
         menu.delegate = self
-        for item in QuickMenu.items(format: Self.currentStyle.format, launchAtLogin: settings.launchAtLogin) {
+        for item in QuickMenu.items(format: Self.currentStyle.format, launchAtLogin: settings.launchAtLogin,
+                                    updateVersion: settings.updates.availableRelease?.version) {
             menu.addItem(menuItem(item))
         }
         // Set only while it's open: with a menu attached, every click would open it.
@@ -191,7 +192,7 @@ final class StatusItemController: NSObject, NSMenuDelegate, NSPopoverDelegate {
         case .reports: showWindow(pane: .reports)
         case .history: showWindow(pane: .history)
         case .health: showWindow(pane: .health)
-        case .settings: showWindow(pane: .settings)
+        case .settings, .showUpdate: showWindow(pane: .settings)
         case .setFormat(let format):
             UserDefaults.standard.set(format.rawValue, forKey: "menuBarFormat")
         case .toggleLaunchAtLogin:

@@ -11,6 +11,7 @@ import BatteryCore
 final class SettingsState {
     static let retentionOptions = [30, 90, 180, 365]
 
+    let updates = UpdateChecker()
     var confirmingReset = false
     private(set) var launchAtLogin = false
     private var needsApproval = false
@@ -110,6 +111,7 @@ struct SettingsView: View {
                     .padding(.bottom, 8)
             }
             MenuBarSettingsSection(model: model)
+            UpdatesSection(updates: settings.updates)
             Section("History") {
                 Picker("Keep history for", selection: retention) {
                     ForEach(SettingsState.retentionOptions, id: \.self) { days in
@@ -169,5 +171,40 @@ struct SettingsView: View {
             retentionDays = days
             model.applyRetention(days: days)
         })
+    }
+}
+
+/// The Settings "About" group: the running version and the update check.
+private struct UpdatesSection: View {
+    let updates: UpdateChecker
+
+    var body: some View {
+        Section("About") {
+            LabeledContent("Version", value: updates.currentVersion ?? "Development build")
+            LabeledContent {
+                HStack {
+                    if let release = updates.availableRelease {
+                        Button("View release") { NSWorkspace.shared.open(release.url) }
+                    }
+                    Button("Check now") { Task { await updates.check() } }
+                        .disabled(updates.currentVersion == nil || updates.state == .checking)
+                }
+            } label: {
+                Text("Updates")
+                Text(summary)
+            }
+        }
+    }
+
+    private var summary: String {
+        switch updates.state {
+        case .idle:
+            updates.currentVersion == nil ? "Updates are checked in the installed app" : "Checked once a day"
+        case .checking: "Checking…"
+        case .upToDate: "You're up to date"
+        case .available(let release):
+            "Version \(release.version) is available. Run brew upgrade --cask battery-meter, or download it from the release page."
+        case .failed(let message): message
+        }
     }
 }
