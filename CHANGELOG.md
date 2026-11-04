@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/anllacarpro/battery-meter/compare/v0.1.3...v0.2.0) (2026-11-04)
+
+
+### Features
+
+* show app version and check GitHub for updates ([#20](https://github.com/anllacarpro/battery-meter/issues/20)) ([3e803cf](https://github.com/anllacarpro/battery-meter/commit/3e803cf3ef158463efbb4c35d1d1c6be7385953d))
+
 ## [0.1.3](https://github.com/anllacarpro/battery-meter/compare/v0.1.2...v0.1.3) (2026-11-04)
 
 
