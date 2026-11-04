@@ -35,6 +35,15 @@ import Testing
         #expect(!off[6].isChecked)
     }
 
+    @Test func updateNoticeLeadsTheMenuOnlyWhenThereIsOne() {
+        let plain = QuickMenu.items(format: .hours, launchAtLogin: false)
+        let withUpdate = QuickMenu.items(format: .hours, launchAtLogin: false, updateVersion: "0.1.4")
+        #expect(withUpdate.first?.title == "Update available: 0.1.4…")
+        #expect(withUpdate.first?.action == .showUpdate)
+        #expect(withUpdate[1].isSeparator)
+        #expect(Array(withUpdate.dropFirst(2)) == plain)
+    }
+
     @Test func quickMenuKeys() {
         let items = QuickMenu.items(format: .hours, launchAtLogin: false)
         #expect(items[7].keyEquivalent == ",")
